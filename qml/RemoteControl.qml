@@ -23,8 +23,6 @@ Page {
     property int padSize: Math.min(page.width - 2 * Theme.paddingLarge,
                                    page.height * 0.43)
     property int padCell: Math.floor(padSize / 3)
-    property bool playerActive: appClient.playerService.players.length > 0
-
     function feedback() {
         commandFeedback.start()
     }
@@ -112,13 +110,7 @@ Page {
             width: padCell
             height: padCell
             onClicked: {
-                // In Kodi fullscreen playback Input.Select does not reliably
-                // reveal the playback OSD. ShowOSD is the dedicated JSON-RPC
-                // action for that. Outside playback, OK remains normal Select.
-                if (playerActive)
-                    remoteController.showOSD()
-                else
-                    remoteController.select()
+                remoteController.select()
                 feedback()
             }
             Rectangle {
