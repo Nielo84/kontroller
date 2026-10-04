@@ -5,6 +5,11 @@ import Sailfish.Silica 1.0
 
 Item {
     property var player
+
+    Remote {
+        id: remoteController
+        client: appClient
+    }
     implicitHeight: theCol.height
     Column {
         anchors.top: parent.top
@@ -39,6 +44,13 @@ Item {
             anchors.right: parent.right
             anchors.rightMargin: Theme.horizontalPageMargin
             color: Theme.highlightColor
+        }
+
+        Button {
+            visible: player && player.type === "video"
+            text: qsTr("Download subtitles")
+            anchors.horizontalCenter: parent.horizontalCenter
+            onClicked: remoteController.downloadSubtitles()
         }
 
         ComboBox {
