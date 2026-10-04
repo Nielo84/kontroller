@@ -31,6 +31,14 @@ void Remote::contextMenu()
 	client_->send(message);
 }
 
+void Remote::downloadSubtitles()
+{
+	QJsonObject params;
+	params.insert("window", "subtitlesearch");
+	QJsonRpcMessage message = QJsonRpcMessage::createRequest("GUI.ActivateWindow", params);
+	client_->send(message);
+}
+
 void Remote::down()
 {
 	QJsonRpcMessage message = QJsonRpcMessage::createRequest("Input.Down");
