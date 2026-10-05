@@ -9,7 +9,13 @@ Page {
     id: page
     allowedOrientations: Orientation.Portrait
 
-    property var player: appClient.playerService.activePlayer
+    property var player: null
+
+    function syncActivePlayer() {
+        player = appClient.playerService.activePlayer
+        if (player)
+            player.refreshPlayerStatus()
+    }
 
     Remote {
         id: remoteController
@@ -31,7 +37,7 @@ Page {
     }
 
     function somethingPlaying() {
-        return player && player.playingInformation.currentItem
+        return player !== null
     }
 
     function getMainDisplay(item) {
@@ -80,7 +86,7 @@ Page {
             Item {
                 width: parent.width
                 height: Theme.iconSizeExtraLarge + 2 * Theme.paddingSmall
-                visible: somethingPlaying()
+                visible: player !== null
 
                 Image {
                     id: thumbnailImg
@@ -121,7 +127,7 @@ Page {
             Label {
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 anchors.horizontalCenter: parent.horizontalCenter
-                visible: !somethingPlaying()
+                visible: player === null
                 text: qsTr("Nothing playing")
                 color: Theme.highlightColor
                 horizontalAlignment: Text.AlignHCenter
@@ -130,14 +136,14 @@ Page {
             PlayerControl {
                 width: parent.width
                 player: page.player
-                visible: somethingPlaying()
+                visible: player !== null
                 showLabel: false
             }
 
             PlayerProperties {
                 width: parent.width
                 player: page.player
-                visible: somethingPlaying()
+                visible: player !== null
             }
 
             Row {
@@ -175,6 +181,28 @@ Page {
                 height: Theme.paddingMedium
             }
         }
+    }
+
+
+    Connections {
+        target: appClient.playerService
+        onActivePlayerChanged: syncActivePlayer()
+    }
+
+    onStatusChanged: {
+        if (status === PageStatus.Activating) {
+            syncActivePlayer()
+            appClient.playerService.refreshPlayerInfo()
+            if (appClient.volumePlugin)
+                appClient.volumePlugin.refreshVolume()
+        }
+    }
+
+    Component.onCompleted: {
+        syncActivePlayer()
+        appClient.playerService.refreshPlayerInfo()
+        if (appClient.volumePlugin)
+            appClient.volumePlugin.refreshVolume()
     }
 
     // Kore-inspired 3x3 remote layout:
