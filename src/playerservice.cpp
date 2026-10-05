@@ -33,7 +33,7 @@ void PlayerService::refreshPlayerInfo()
 	if(!refreshPending_)
 	{
 		refreshPending_ = true;
-		QJsonRpcMessage message = QJsonRpcMessage::createRequest("Player.getActivePlayers");
+		QJsonRpcMessage message = QJsonRpcMessage::createRequest("Player.GetActivePlayers");
 		QJsonRpcServiceReply* reply = client_->send(message);
 		if(reply)
 			connect(reply, &QJsonRpcServiceReply::finished, this, &PlayerService::refreshPlayerInfoCb_);
