@@ -90,12 +90,6 @@ Page {
                     label: qsTr("Images")
                 }
                 ListElement {
-                    page:"current"
-                    icon:"image://theme/icon-m-accessory-speaker"
-                    needConnect:true
-                    label: qsTr("Current")
-                }
-                ListElement {
                     page:"remote"
                     icon:"image://assets/icons/icon-m-remote"
                     needConnect:true
@@ -252,10 +246,6 @@ Page {
         {
             internal.createImagePage({"file":"", "filetype":"", "label":qsTr("Sources")});
         }
-        else if(page === "current")
-        {
-            internal.createCurrentlyPlayingPage();
-        }
         else if(page === "remote")
         {
             pushRemotePage()
@@ -277,7 +267,7 @@ Page {
 
     function pushCurrentPage()
     {
-        pageStack.push(Qt.resolvedUrl("CurrentlyPlaying.qml"));
+        pushRemotePage();
     }
 
     function toMenu()
@@ -342,7 +332,7 @@ Page {
 
     function pushCurrentlyPlaying()
     {
-        internal.createCurrentlyPlayingPage();
+        pushRemotePage();
     }
 
 }
