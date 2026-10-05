@@ -1,12 +1,15 @@
-import QtQuick 2.0
+import QtQuick 2.6
 import QtFeedback 5.0
 import harbour.eu.tgcm 1.0
 import Sailfish.Silica 1.0
 import "."
+import "./components"
 
 Page {
     id: page
     allowedOrientations: Orientation.Portrait
+
+    property var player: appClient.playerService.activePlayer
 
     Remote {
         id: remoteController
@@ -19,20 +22,165 @@ Page {
         duration: 70
     }
 
-    // Keep the control pad thumb-friendly and clear of the screen edges.
     property int padSize: Math.min(page.width - 2 * Theme.paddingLarge,
-                                   page.height * 0.43)
+                                   page.height * 0.40)
     property int padCell: Math.floor(padSize / 3)
+
     function feedback() {
         commandFeedback.start()
+    }
+
+    function somethingPlaying() {
+        return player && player.playingInformation.currentItem
+    }
+
+    function getMainDisplay(item) {
+        if (!item)
+            return qsTr("Nothing playing")
+        if (item.type === "song")
+            return item.artist ? item.artist : qsTr("Unknown artist")
+        if (item.type === "movie")
+            return item.label
+        if (item.type === "episode")
+            return item.tvshow
+        return item.label
+    }
+
+    function getSubDisplay(item) {
+        if (!item)
+            return ""
+        if (item.type === "song")
+            return item.label ? item.label : item.file
+        if (item.type === "movie")
+            return qsTr("Movie")
+        if (item.type === "episode")
+            return item.label
+        return ""
+    }
+
+    SilicaFlickable {
+        id: upperPanel
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: dpad.top
+        anchors.bottomMargin: Theme.paddingSmall
+        contentHeight: contentColumn.height
+        clip: true
+
+        Column {
+            id: contentColumn
+            width: parent.width
+            spacing: Theme.paddingSmall
+
+            PageHeader {
+                title: qsTr("Remote")
+            }
+
+            Item {
+                width: parent.width
+                height: Theme.iconSizeExtraLarge + 2 * Theme.paddingSmall
+                visible: somethingPlaying()
+
+                Image {
+                    id: thumbnailImg
+                    anchors.left: parent.left
+                    anchors.leftMargin: Theme.horizontalPageMargin
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Theme.iconSizeExtraLarge
+                    height: Theme.iconSizeExtraLarge
+                    fillMode: Image.PreserveAspectFit
+                    source: player ? player.playingInformation.currentItem.thumbnail : ""
+                }
+
+                Column {
+                    anchors.left: thumbnailImg.right
+                    anchors.leftMargin: Theme.paddingMedium
+                    anchors.right: parent.right
+                    anchors.rightMargin: Theme.horizontalPageMargin
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Theme.paddingSmall
+
+                    Label {
+                        width: parent.width
+                        text: player ? getMainDisplay(player.playingInformation.currentItem) : ""
+                        font.pixelSize: Theme.fontSizeLarge
+                        truncationMode: TruncationMode.Fade
+                    }
+
+                    Label {
+                        width: parent.width
+                        text: player ? getSubDisplay(player.playingInformation.currentItem) : ""
+                        color: Theme.highlightColor
+                        font.pixelSize: Theme.fontSizeSmall
+                        truncationMode: TruncationMode.Fade
+                    }
+                }
+            }
+
+            Label {
+                width: parent.width - 2 * Theme.horizontalPageMargin
+                anchors.horizontalCenter: parent.horizontalCenter
+                visible: !somethingPlaying()
+                text: qsTr("Nothing playing")
+                color: Theme.highlightColor
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            PlayerControl {
+                width: parent.width
+                player: page.player
+                visible: somethingPlaying()
+                showLabel: false
+            }
+
+            PlayerProperties {
+                width: parent.width
+                player: page.player
+                visible: somethingPlaying()
+            }
+
+            Row {
+                width: parent.width
+                height: volumeControl.height
+                spacing: Theme.paddingSmall
+
+                BackgroundItem {
+                    id: muteButton
+                    width: Theme.itemSizeMedium
+                    height: volumeControl.height
+                    enabled: appClient && appClient.volumePlugin
+                    onClicked: {
+                        if (appClient && appClient.volumePlugin)
+                            appClient.volumePlugin.muted = !appClient.volumePlugin.muted
+                    }
+
+                    Label {
+                        anchors.centerIn: parent
+                        text: appClient && appClient.volumePlugin && appClient.volumePlugin.muted ? "🔇" : "🔊"
+                        font.pixelSize: Theme.fontSizeLarge
+                        color: muteButton.highlighted ? Theme.highlightColor : Theme.primaryColor
+                    }
+                }
+
+                VolumeControl {
+                    id: volumeControl
+                    width: parent.width - muteButton.width - parent.spacing
+                    volumePlugin: appClient ? appClient.volumePlugin : null
+                }
+            }
+
+            Item {
+                width: 1
+                height: Theme.paddingMedium
+            }
+        }
     }
 
     // Kore-inspired 3x3 remote layout:
     // Home | Up   | Info
     // Left | OK   | Right
     // Back | Down | Menu
-    //
-    // The complete pad sits near the bottom for one-handed use.
     Item {
         id: dpad
         width: padCell * 3
