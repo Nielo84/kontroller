@@ -10,6 +10,7 @@ Page {
     allowedOrientations: Orientation.Portrait
 
     property var player: null
+    property bool hidePanel: true // Combined remote has its own playback and volume controls.
 
     // Refresh active playback state whenever this combined page opens.
     function syncActivePlayer() {

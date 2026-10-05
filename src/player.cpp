@@ -774,6 +774,7 @@ void Player::refreshCurrentlyPlaying_()
 	QJsonArray properties;
 	properties.append("thumbnail");
 	properties.append("fanart");
+	properties.append("art");
 	properties.append("title");
 	properties.append("file");
 	properties.append("artistid");
@@ -911,7 +912,27 @@ void Player::handleGetItemResponse_()
 			auto item = itemTmp.toObject();
 			item_.setFile(item.value("file").toString());
 			item_.setType(item.value("type").toString());
-			item_.setThumbnail(getImageUrl(client_, item.value("thumbnail").toString()).toString());
+
+			// Kodi often leaves the legacy "thumbnail" field empty for movies/episodes.
+			// Kore uses artwork.poster for those media types, so prefer the same source here.
+			QString thumbnail = item.value("thumbnail").toString();
+			auto art = item.value("art").toObject();
+			if (item_.type() == "movie" || item_.type() == "episode")
+			{
+				QString poster = art.value("poster").toString();
+				if (poster.isEmpty())
+					poster = art.value("tvshow.poster").toString();
+				if (poster.isEmpty())
+					poster = art.value("season.poster").toString();
+				if (!poster.isEmpty())
+					thumbnail = poster;
+			}
+			if (thumbnail.isEmpty())
+				thumbnail = art.value("thumb").toString();
+			if (thumbnail.isEmpty())
+				thumbnail = item.value("fanart").toString();
+
+			item_.setThumbnail(getImageUrl(client_, thumbnail).toString());
 			item_.setFanart(getImageUrl(client_, item.value("fanart").toString()).toString());
 			item_.setLabel(item.value("title").toString());
 			if (item_.type() == "song")
