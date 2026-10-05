@@ -76,7 +76,8 @@ void KodiVolumePlugin::refreshVolume_()
 	parameters["properties"] = properties;
 	QJsonRpcMessage message = QJsonRpcMessage::createRequest("Application.GetProperties", parameters);
 	auto reply = client_->send(message);
-	connect(reply, &QJsonRpcServiceReply::finished, this, &KodiVolumePlugin::volumeReply_);
+	if (reply)
+		connect(reply, &QJsonRpcServiceReply::finished, this, &KodiVolumePlugin::volumeReply_);
 }
 
 void KodiVolumePlugin::increaseVolume_()
@@ -133,40 +134,42 @@ void KodiVolumePlugin::setMuted_(bool muted)
 void KodiVolumePlugin::volumeReply_()
 {
 	auto reply = dynamic_cast<QJsonRpcServiceReply*>(sender());
-	if (reply != nullptr)
+	if (reply == nullptr)
+		return;
+
+	QJsonRpcMessage response = reply->response();
+	if (response.errorCode() != 0)
+		return;
+
+	QJsonValue result = response.result();
+	if (result.isObject())
 	{
-		auto obj = reply->response().toObject();
-		if (obj.contains("result"))
+		QJsonObject properties = result.toObject();
+		QJsonValue volume = properties.value("volume");
+		if (volume.isDouble())
 		{
-			auto result = obj["result"];
-			if (result.isObject() && result.toObject().contains("volume"))
-			{
-				auto volume = result.toObject()["volume"];
-				if (volume.isDouble())
-				{
-					currentVolumeStored_ = volume.toInt();
-					emit currentVolumeChanged(currentVolumeStored_);
-					emit valueValidChanged(true);
-				}
-				auto muted = result.toObject()["muted"];
-				if (muted.isBool())
-				{
-					currentMuteStored_ = muted.toBool();
-					emit mutedChanged(currentMuteStored_);
-				}
-			}
-			else if (result.isDouble())
-			{
-				currentVolumeStored_ = result.toInt();
-				emit currentVolumeChanged(currentVolumeStored_);
-				emit valueValidChanged(true);
-			}
-			else if (result.isBool())
-			{
-				currentMuteStored_ = result.toBool();
-				emit mutedChanged(currentMuteStored_);
-			}
+			currentVolumeStored_ = volume.toInt();
+			emit currentVolumeChanged(currentVolumeStored_);
+			emit valueValidChanged(true);
 		}
+
+		QJsonValue muted = properties.value("muted");
+		if (muted.isBool())
+		{
+			currentMuteStored_ = muted.toBool();
+			emit mutedChanged(currentMuteStored_);
+		}
+	}
+	else if (result.isDouble())
+	{
+		currentVolumeStored_ = result.toInt();
+		emit currentVolumeChanged(currentVolumeStored_);
+		emit valueValidChanged(true);
+	}
+	else if (result.isBool())
+	{
+		currentMuteStored_ = result.toBool();
+		emit mutedChanged(currentMuteStored_);
 	}
 }
 
