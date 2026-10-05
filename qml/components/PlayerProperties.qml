@@ -18,7 +18,7 @@ Item {
         spacing: Theme.paddingSmall
         id:theCol
         ComboBox {
-            visible: player && player.type === "video" && player.subtitles.length > 0
+            visible: player && player.type === "video"
             id:cbxSubs
             label:qsTr("Subtitles")
             clip:true
@@ -31,26 +31,14 @@ Item {
                         onClicked: if(player) { player.currentSubtitleIndex = model.modelData.index; }
                     }
                 }
+                MenuItem {
+                    text: qsTr("Download subtitles…")
+                    onClicked: remoteController.downloadSubtitles()
+                }
             }
             currentIndex: -1
-            value: ""
+            value: player && player.subtitles.length === 0 ? qsTr("No subtitles available") : ""
             Component.onCompleted: { console.log("height is " + height); }
-        }
-        Label {
-            visible: player && player.type === "video" && player.subtitles.length === 0
-            text: qsTr("No subtitles available")
-            anchors.left: parent.left
-            anchors.leftMargin: Theme.horizontalPageMargin
-            anchors.right: parent.right
-            anchors.rightMargin: Theme.horizontalPageMargin
-            color: Theme.highlightColor
-        }
-
-        Button {
-            visible: player && player.type === "video"
-            text: qsTr("Download subtitles")
-            anchors.horizontalCenter: parent.horizontalCenter
-            onClicked: remoteController.downloadSubtitles()
         }
 
         ComboBox {
