@@ -11,6 +11,7 @@ Page {
 
     property var player: null
 
+    // Refresh active playback state whenever this combined page opens.
     function syncActivePlayer() {
         player = appClient.playerService.activePlayer
         if (player)
