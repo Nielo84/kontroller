@@ -72,6 +72,7 @@ void KodiVolumePlugin::refreshVolume_()
 	QJsonObject parameters;
 	QJsonArray properties;
 	properties.push_back(QString::fromUtf8("volume"));
+	properties.push_back(QString::fromUtf8("muted"));
 	parameters["properties"] = properties;
 	QJsonRpcMessage message = QJsonRpcMessage::createRequest("Application.GetProperties", parameters);
 	auto reply = client_->send(message);
@@ -122,8 +123,11 @@ bool KodiVolumePlugin::muted_() const
 
 void KodiVolumePlugin::setMuted_(bool muted)
 {
-	// todo : implement request
-	Q_UNUSED(muted);
+	QJsonArray parameters;
+	parameters.append(muted);
+	QJsonRpcMessage message = QJsonRpcMessage::createRequest("Application.SetMute", parameters);
+	auto reply = client_->send(message);
+	connect(reply, &QJsonRpcServiceReply::finished, this, &KodiVolumePlugin::volumeReply_);
 }
 
 void KodiVolumePlugin::volumeReply_()
@@ -156,6 +160,11 @@ void KodiVolumePlugin::volumeReply_()
 				currentVolumeStored_ = result.toInt();
 				emit currentVolumeChanged(currentVolumeStored_);
 				emit valueValidChanged(true);
+			}
+			else if (result.isBool())
+			{
+				currentMuteStored_ = result.toBool();
+				emit mutedChanged(currentMuteStored_);
 			}
 		}
 	}
