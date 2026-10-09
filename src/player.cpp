@@ -143,11 +143,14 @@ void Player::setSpeed(int speed)
 
 void Player::setSpeed_(int speed)
 {
-	if (speed == speed_)
-		return;
+	const bool changed = (speed != speed_);
 	speed_ = speed;
-	emit speedChanged();
-	if (speed == 0)
+	if (changed)
+		emit speedChanged();
+
+	// Keep the local progress clock strictly tied to Kodi's playback speed.
+	// A paused player is still active, but its clock must not keep running.
+	if (speed_ == 0 || totalTime_ == 0)
 		timer_.stop();
 	else
 		timer_.start();
@@ -291,6 +294,9 @@ void Player::setTime_(int time)
 
 	time_ = time;
 	emit timeChanged(time);
+
+	if (totalTime_ > 0)
+		setPercentage_(100.0 * (double)time_ / (double)totalTime_);
 }
 
 void Player::setTotalTime_(int totalTime)
@@ -300,7 +306,11 @@ void Player::setTotalTime_(int totalTime)
 
 	totalTime_ = totalTime;
 	emit totalTimeChanged(totalTime);
-	if (totalTime != 0)
+
+	if (totalTime_ > 0)
+		setPercentage_(100.0 * (double)time_ / (double)totalTime_);
+
+	if (totalTime_ != 0 && speed_ != 0)
 		timer_.start();
 	else
 		timer_.stop();
@@ -522,10 +532,13 @@ void Player::refreshPlayerStatus()
 
 void Player::updateTimer_()
 {
-	time_ += timer_.interval();
-	if (totalTime_ != 0)
-		setPercentage_(100 * (double)time_ / (double)totalTime_);
-	emit timeChanged(time_);
+	if (speed_ == 0)
+		return;
+
+	int newTime = time_ + timer_.interval() * speed_;
+	if (totalTime_ > 0)
+		newTime = qBound(0, newTime, totalTime_);
+	setTime_(newTime);
 }
 
 void Player::handlePlayerStatus_()
@@ -793,14 +806,21 @@ void Player::refreshCurrentlyPlaying_()
 
 void Player::setPercentage(double percentage)
 {
+	const double target = qBound(0.0, percentage, 100.0);
+
+	// Update the UI immediately; Kodi's OnSeek notification will then
+	// confirm the exact absolute time and correct any small difference.
+	setPercentage_(target);
+	if (totalTime_ > 0)
+		setTime_((int)(totalTime_ * target / 100.0));
+
 	QJsonObject parameters;
 	parameters.insert("playerid", playerId_);
 	QJsonObject valueArg;
-	valueArg.insert("percentage", percentage);
+	valueArg.insert("percentage", target);
 	parameters.insert("value", valueArg);
 	QJsonRpcMessage message = QJsonRpcMessage::createRequest("Player.Seek", parameters);
 	client_->send(message);
-	// don't handle result here : will be handled by a notification or the refresh
 }
 
 void Player::seekBackward()

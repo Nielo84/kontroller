@@ -151,16 +151,12 @@ void PlayerService::updatePlayerSpeed(int playerId, int speed)
 		if (player->playerId() == playerId)
 		{
 			found = true;
-			if(speed == 0)
-			{
-				player->setSpeed(speed);
-			}
-			else
-			{
-				player->setActive(true);
-				player->refreshPlayerStatus();
-				emit activePlayerChanged();
-			}
+			// A paused player is still the active player. Refresh on both play
+			// and pause so the Remote page gets metadata immediately.
+			player->setActive(true);
+			player->setSpeed(speed);
+			player->refreshPlayerStatus();
+			emit activePlayerChanged();
 		}
 	}
 	if(!found)
@@ -198,7 +194,8 @@ void PlayerService::updatePlayerSeek_(int playerId, int hours, int minutes, int 
 		if(player->playerId() == playerId)
 		{
 			found = true;
-			player->setTime(player->time() + hours * 3600 * 1000 + minutes * 60 * 1000 + seconds * 1000 + milliseconds);
+			// Player.OnSeek supplies the absolute playback time.
+			player->setTime(hours * 3600 * 1000 + minutes * 60 * 1000 + seconds * 1000 + milliseconds);
 		}
 	}
 	if(!found)

@@ -10,7 +10,6 @@ Item {
     property var player : null
     implicitHeight: row.y + row.height
 
-    property var remorse: null
 
     Slider {
         id: progressSlider
@@ -138,9 +137,7 @@ Item {
         if(player === null)
             return;
         if(command === "stop")
-        {
-            remorse = Remorse.popupAction(pageStack.currentPage, "", function(){player.stop();});
-        }
+            player.stop();
         if(command === "prev")
             player.previous();
         if(command === "playpause")
@@ -188,8 +185,10 @@ Item {
     }
 
     onPlayerChanged: {
-        if(player)
+        if(player) {
             player.onPercentageChanged.connect(updatePercentage);
+            updatePercentage(player.percentage);
+        }
     }
     Component.onDestruction: {
         if(player)

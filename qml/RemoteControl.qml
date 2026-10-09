@@ -11,12 +11,33 @@ Page {
 
     property var player: null
     property bool hidePanel: true // Combined remote has its own playback and volume controls.
+    property int initialRefreshAttempts: 0
 
     // Refresh active playback state whenever this combined page opens.
     function syncActivePlayer() {
         player = appClient.playerService.activePlayer
         if (player)
             player.refreshPlayerStatus()
+    }
+
+    function startInitialPlayerRefresh() {
+        initialRefreshAttempts = 0
+        syncActivePlayer()
+        appClient.playerService.refreshPlayerInfo()
+        initialPlayerRefresh.restart()
+    }
+
+    Timer {
+        id: initialPlayerRefresh
+        interval: 500
+        repeat: true
+        onTriggered: {
+            initialRefreshAttempts++
+            syncActivePlayer()
+            appClient.playerService.refreshPlayerInfo()
+            if ((player && player.type !== "") || initialRefreshAttempts >= 8)
+                stop()
+        }
     }
 
     Remote {
@@ -193,16 +214,14 @@ Page {
 
     onStatusChanged: {
         if (status === PageStatus.Activating) {
-            syncActivePlayer()
-            appClient.playerService.refreshPlayerInfo()
+            startInitialPlayerRefresh()
             if (appClient.volumePlugin)
                 appClient.volumePlugin.refreshVolume()
         }
     }
 
     Component.onCompleted: {
-        syncActivePlayer()
-        appClient.playerService.refreshPlayerInfo()
+        startInitialPlayerRefresh()
         if (appClient.volumePlugin)
             appClient.volumePlugin.refreshVolume()
     }

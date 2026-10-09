@@ -439,16 +439,22 @@ void Client::handleMessageReceived_(QJsonRpcMessage message)
 				QJsonObject player = data.value("player").toObject();
 				if(!player.isEmpty())
 				{
-					int playerId = static_cast<int>(player.value("playerId").toDouble());
-					QJsonObject offset = player.value("seekoffset").toObject();
-					if(!offset.isEmpty())
+					// Kodi uses lowercase "playerid". The notification also includes
+					// the absolute playback time; using seekoffset as a delta causes
+					// the progress bar to jump back after seeks.
+					int playerId = static_cast<int>(player.value("playerid").toDouble());
+					QJsonObject time = player.value("time").toObject();
+					if(!time.isEmpty())
 					{
-						int hours = static_cast<int>(offset.value("hours").toDouble());
-						int minutes = static_cast<int>(offset.value("minutes").toDouble());
-						int seconds = static_cast<int>(offset.value("seconds").toDouble());
-						int milliseconds = static_cast<int>(offset.value("milliseconds").toDouble());
+						int hours = static_cast<int>(time.value("hours").toDouble());
+						int minutes = static_cast<int>(time.value("minutes").toDouble());
+						int seconds = static_cast<int>(time.value("seconds").toDouble());
+						int milliseconds = static_cast<int>(time.value("milliseconds").toDouble());
 						emit playerSeekChanged(playerId, hours, minutes, seconds, milliseconds);
 					}
+					QJsonValue speed = player.value("speed");
+					if(speed.isDouble())
+						emit playerSpeedChanged(playerId, static_cast<int>(speed.toDouble()));
 				}
 			}
 		}
@@ -460,7 +466,7 @@ void Client::handleMessageReceived_(QJsonRpcMessage message)
 				QJsonObject player = data.value("player").toObject();
 				if (!player.isEmpty())
 				{
-					int playerId = static_cast<int>(player.value("playerId").toDouble());
+					int playerId = static_cast<int>(player.value("playerid").toDouble());
 					for (auto& player : playerService_->playersList())
 					{
 						if (player->playerId() == playerId)
