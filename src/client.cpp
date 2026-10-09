@@ -361,7 +361,14 @@ void Client::handleMessageReceived_(QJsonRpcMessage message)
 	if(message.type() == QJsonRpcMessage::Notification)
 	{
 		QString method = message.method();
-		if(method == "Player.OnPause" || method == "Player.OnPlay" || method == "Player.OnResume")
+		// Modern Kodi sends OnPlay before all video metadata is ready. Kore waits
+		// for OnAVStart for exactly this reason. Refresh again here so the Remote
+		// page receives thumbnail, streams, subtitles and timing immediately.
+		if(method == "Player.OnAVStart")
+		{
+			playerService_->refreshPlayerInfo();
+		}
+		else if(method == "Player.OnPause" || method == "Player.OnPlay" || method == "Player.OnResume")
 		{
 			QJsonObject data = message.params().toObject().value("data").toObject();
 			QJsonValue player = data.value("player");

@@ -559,11 +559,16 @@ void Player::handlePlayerStatus_()
 				QString typ = typeVal.toString();
 				if (typ != type())
 					setType_(typ);
-				// don't read percentage : we recompute it from time if available
-				if (obj.value("time").isObject())
-					setTime_(getTime_(obj.value("time").toObject()));
-				else if (obj.value("percentage").isDouble()) // read if time not available
-					setPercentage_((int)obj.value("percentage").toDouble());
+				// During a seek an older GetProperties reply can arrive after the
+				// user moved the slider. Do not let that stale value pull the
+				// seek bar back; Player.Seek/OnSeek will supply the authoritative time.
+				if (!seekInFlight_)
+				{
+					if (obj.value("time").isObject())
+						setTime_(getTime_(obj.value("time").toObject()));
+					else if (obj.value("percentage").isDouble()) // read if time not available
+						setPercentage_(obj.value("percentage").toDouble());
+				}
 				if (obj.value("totaltime").isObject())
 					setTotalTime_(getTime_(obj.value("totaltime").toObject()));
 				if (obj.value("speed").isDouble())
@@ -807,20 +812,77 @@ void Player::refreshCurrentlyPlaying_()
 void Player::setPercentage(double percentage)
 {
 	const double target = qBound(0.0, percentage, 100.0);
-
-	// Update the UI immediately; Kodi's OnSeek notification will then
-	// confirm the exact absolute time and correct any small difference.
-	setPercentage_(target);
 	if (totalTime_ > 0)
-		setTime_((int)(totalTime_ * target / 100.0));
+		seekToTime((int)(totalTime_ * target / 100.0));
+}
+
+void Player::seekToTime(int timeMs)
+{
+	if (totalTime_ <= 0)
+		return;
+
+	const int target = qBound(0, timeMs, totalTime_);
+	const int serial = ++seekRequestSerial_;
+	seekInFlight_ = true;
+
+	// Reflect the user's chosen position immediately. The Player.Seek reply
+	// contains Kodi's exact time and will correct this if necessary.
+	setTime_(target);
+
+	int remaining = target;
+	QJsonObject timeValue;
+	timeValue.insert("hours", remaining / 3600000);
+	remaining %= 3600000;
+	timeValue.insert("minutes", remaining / 60000);
+	remaining %= 60000;
+	timeValue.insert("seconds", remaining / 1000);
+	timeValue.insert("milliseconds", remaining % 1000);
+
+	QJsonObject valueArg;
+	valueArg.insert("time", timeValue);
 
 	QJsonObject parameters;
 	parameters.insert("playerid", playerId_);
-	QJsonObject valueArg;
-	valueArg.insert("percentage", target);
 	parameters.insert("value", valueArg);
+
 	QJsonRpcMessage message = QJsonRpcMessage::createRequest("Player.Seek", parameters);
-	client_->send(message);
+	auto reply = client_->send(message);
+	if (reply)
+	{
+		reply->setProperty("seekSerial", serial);
+		connect(reply, &QJsonRpcServiceReply::finished, this, &Player::handleSeekResult_);
+	}
+	else
+	{
+		seekInFlight_ = false;
+	}
+}
+
+void Player::handleSeekResult_()
+{
+	auto reply = dynamic_cast<QJsonRpcServiceReply*>(sender());
+	if (!reply)
+		return;
+
+	const int serial = reply->property("seekSerial").toInt();
+	if (serial != seekRequestSerial_)
+		return; // an older seek finished after a newer one
+
+	seekInFlight_ = false;
+	const auto response = reply->response();
+	if (response.errorCode() != 0 || !response.result().isObject())
+	{
+		refreshPlayerStatus();
+		return;
+	}
+
+	const auto result = response.result().toObject();
+	if (result.value("totaltime").isObject())
+		setTotalTime_(getTime_(result.value("totaltime").toObject()));
+	if (result.value("time").isObject())
+		setTime_(getTime_(result.value("time").toObject()));
+	else if (result.value("percentage").isDouble())
+		setPercentage_(result.value("percentage").toDouble());
 }
 
 void Player::seekBackward()
@@ -828,7 +890,7 @@ void Player::seekBackward()
 	QJsonObject parameters;
 	parameters.insert("playerid", playerId_);
 	QJsonObject valueArg;
-	valueArg.insert("percentage", QLatin1String("smallbackward"));
+	valueArg.insert("step", QLatin1String("smallbackward"));
 	parameters.insert("value", valueArg);
 	QJsonRpcMessage message = QJsonRpcMessage::createRequest("Player.Seek", parameters);
 	client_->send(message);
@@ -839,7 +901,7 @@ void Player::seekForward()
 	QJsonObject parameters;
 	parameters.insert("playerid", playerId_);
 	QJsonObject valueArg;
-	valueArg.insert("percentage", QLatin1String("smallforward"));
+	valueArg.insert("step", QLatin1String("smallforward"));
 	parameters.insert("value", valueArg);
 	QJsonRpcMessage message = QJsonRpcMessage::createRequest("Player.Seek", parameters);
 	client_->send(message);

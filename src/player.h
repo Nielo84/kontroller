@@ -32,6 +32,8 @@ class Player : public QObject
 	double percentage_ = 0;
 	int totalTime_ = 0;
 	int time_ = 0;
+	int seekRequestSerial_ = 0;
+	bool seekInFlight_ = false;
 
 	QTimer timer_;
 
@@ -150,6 +152,7 @@ public:
 	eu::tgcm::kontroller::PlaylistService* playlistService();
 
 	Q_INVOKABLE void stop();
+	Q_INVOKABLE void seekToTime(int timeMs);
 	Q_INVOKABLE void seekBackward();
 	Q_INVOKABLE void seekForward();
 	Q_INVOKABLE void playPause();
@@ -261,6 +264,7 @@ private slots:
 	void handleSetAudioStreamResult_(QJsonRpcServiceReply* reply, int index);
 	void handleSetSubtitleResult_(QJsonRpcServiceReply* reply, int index);
 	void handlePlayPause_();
+	void handleSeekResult_();
 	void handleSetRepeatResult_(QJsonRpcServiceReply* reply, QString repeat);
 	void handleGetItemResponse_();
 

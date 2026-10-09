@@ -16,14 +16,22 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         minimumValue: 0
-        maximumValue: 100
-        value: 0
-        onPressedChanged: {
-            if(!pressed && player && player.canSeek)
-                player.percentage = value
+        maximumValue: player && player.totalTime > 0 ? player.totalTime : 1
+        stepSize: 1000
+        animateValue: false
+        value: player ? player.time : 0
+        onDownChanged: {
+            if(!down && player && player.canSeek) {
+                var target = Math.round(sliderValue)
+                player.seekToTime(target)
+
+                // Dragging a Silica Slider breaks its value binding. Restore it
+                // after sending the seek so later Kodi time updates keep moving it.
+                value = Qt.binding(function() { return player ? player.time : 0 })
+            }
         }
         visible: showSlider && player && player.type !== "picture"
-        valueText: down?getPercentageTime(player, sliderValue):""
+        valueText: down ? Utils.formatMsecTime(sliderValue) : ""
     }
 
     Label {
@@ -119,19 +127,6 @@ Item {
         return "-";
     }
 
-    function getPercentage(player)
-    {
-        if(player)
-            return player.percentage;
-        else
-            return 0;
-    }
-
-    function getPercentageTime(player, percentage)
-    {
-        return Utils.formatMsecTime(player.totalTime * percentage / 100);
-    }
-
     function executeCommand(command)
     {
         if(player === null)
@@ -178,20 +173,4 @@ Item {
             return item.type;
     }
 
-    function updatePercentage(value)
-    {
-        if(!progressSlider.pressed) // don't update value while it is being modified
-            progressSlider.value = value
-    }
-
-    onPlayerChanged: {
-        if(player) {
-            player.onPercentageChanged.connect(updatePercentage);
-            updatePercentage(player.percentage);
-        }
-    }
-    Component.onDestruction: {
-        if(player)
-            player.onPercentageChanged.disconnect(updatePercentage);
-    }
 }
