@@ -9,6 +9,19 @@ namespace tgcm
 namespace kontroller
 {
 
+namespace
+{
+void sendRemoteButton(Client* client, const QString& button)
+{
+	QJsonObject params;
+	params.insert("button", button);
+	params.insert("keymap", "R1");
+	params.insert("holdtime", 0);
+	QJsonRpcMessage message = QJsonRpcMessage::createRequest("Input.ButtonEvent", params);
+	client->send(message);
+}
+}
+
 Remote::Remote(QObject *parent) :
     QObject(parent)
 {
@@ -41,8 +54,7 @@ void Remote::downloadSubtitles()
 
 void Remote::down()
 {
-	QJsonRpcMessage message = QJsonRpcMessage::createRequest("Input.Down");
-	client_->send(message);
+	sendRemoteButton(client_, "down");
 }
 
 void Remote::home()
@@ -59,20 +71,17 @@ void Remote::info()
 
 void Remote::left()
 {
-	QJsonRpcMessage message = QJsonRpcMessage::createRequest("Input.Left");
-	client_->send(message);
+	sendRemoteButton(client_, "left");
 }
 
 void Remote::right()
 {
-	QJsonRpcMessage message = QJsonRpcMessage::createRequest("Input.Right");
-	client_->send(message);
+	sendRemoteButton(client_, "right");
 }
 
 void Remote::select()
 {
-	QJsonRpcMessage message = QJsonRpcMessage::createRequest("Input.Select");
-	client_->send(message);
+	sendRemoteButton(client_, "select");
 }
 
 void Remote::showCodec()
@@ -89,8 +98,7 @@ void Remote::showOSD()
 
 void Remote::up()
 {
-	QJsonRpcMessage message = QJsonRpcMessage::createRequest("Input.Up");
-	client_->send(message);
+	sendRemoteButton(client_, "up");
 }
 
 void Remote::volumeUp()
