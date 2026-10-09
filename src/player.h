@@ -8,6 +8,7 @@
 
 #include <QObject>
 #include <QQmlListProperty>
+#include <QElapsedTimer>
 #include <QTimer>
 #include <QVector>
 
@@ -36,6 +37,8 @@ class Player : public QObject
 	bool seekInFlight_ = false;
 
 	QTimer timer_;
+	QTimer seekRefreshTimer_;
+	QElapsedTimer playbackElapsed_;
 
 	bool shuffled_ = false;
 	bool canMove_ = false;
@@ -168,6 +171,9 @@ public:
 	// can be set from c++, but not from qml
 	void setActive(bool value);
 
+	// Debounced refresh used after Kodi seek notifications/replies.
+	void scheduleStatusRefresh();
+
 	/**
 	 * @brief updateProperty updates a single property, as received by a OnPropertyChanged
 	 * event from kodi
@@ -237,6 +243,7 @@ private slots:
 	void updateTimer_();
 
 	void handlePlayerStatus_();
+	void finishSeekRefresh_();
 
 private:
 	// these functions are the internal ones, used to alter the internal variables, received from the json rpc replies

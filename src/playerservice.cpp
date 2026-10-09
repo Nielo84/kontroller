@@ -194,8 +194,11 @@ void PlayerService::updatePlayerSeek_(int playerId, int hours, int minutes, int 
 		if(player->playerId() == playerId)
 		{
 			found = true;
-			// Player.OnSeek supplies the absolute playback time.
+			// Player.OnSeek supplies the absolute playback time. Follow it with
+			// a short debounced GetProperties refresh so any late/stale seek
+			// notifications cannot leave the slider at the wrong position.
 			player->setTime(hours * 3600 * 1000 + minutes * 60 * 1000 + seconds * 1000 + milliseconds);
+			player->scheduleStatusRefresh();
 		}
 	}
 	if(!found)

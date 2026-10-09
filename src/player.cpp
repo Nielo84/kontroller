@@ -149,11 +149,18 @@ void Player::setSpeed_(int speed)
 		emit speedChanged();
 
 	// Keep the local progress clock strictly tied to Kodi's playback speed.
-	// A paused player is still active, but its clock must not keep running.
+	// Use a monotonic elapsed clock so QTimer scheduling jitter cannot make
+	// Kontroller slowly drift behind the TV.
 	if (speed_ == 0 || totalTime_ == 0)
+	{
 		timer_.stop();
+		playbackElapsed_.invalidate();
+	}
 	else
+	{
+		playbackElapsed_.start();
 		timer_.start();
+	}
 }
 
 int Player::playlistPosition() const
@@ -289,6 +296,13 @@ void Player::setPercentage_(double percentage)
 
 void Player::setTime_(int time)
 {
+	// Re-anchor the local clock whenever we receive or calculate a new
+	// playback position. This also keeps the displayed time tightly synced.
+	if (speed_ != 0 && totalTime_ > 0)
+		playbackElapsed_.start();
+	else
+		playbackElapsed_.invalidate();
+
 	if (time_ == time)
 		return;
 
@@ -311,9 +325,15 @@ void Player::setTotalTime_(int totalTime)
 		setPercentage_(100.0 * (double)time_ / (double)totalTime_);
 
 	if (totalTime_ != 0 && speed_ != 0)
+	{
+		playbackElapsed_.start();
 		timer_.start();
+	}
 	else
+	{
 		timer_.stop();
+		playbackElapsed_.invalidate();
+	}
 }
 
 void Player::setShuffled_(bool shuffled)
@@ -532,12 +552,23 @@ void Player::refreshPlayerStatus()
 
 void Player::updateTimer_()
 {
-	if (speed_ == 0)
+	if (speed_ == 0 || totalTime_ <= 0)
 		return;
 
-	int newTime = time_ + timer_.interval() * speed_;
-	if (totalTime_ > 0)
-		newTime = qBound(0, newTime, totalTime_);
+	if (!playbackElapsed_.isValid())
+	{
+		playbackElapsed_.start();
+		return;
+	}
+
+	// Add the real elapsed time instead of assuming every QTimer callback
+	// happened exactly on schedule.
+	const qint64 elapsed = playbackElapsed_.elapsed();
+	if (elapsed <= 0)
+		return;
+
+	int newTime = time_ + static_cast<int>(elapsed * speed_);
+	newTime = qBound(0, newTime, totalTime_);
 	setTime_(newTime);
 }
 
@@ -677,8 +708,14 @@ Player::Player(Client* client, int playerId, QObject* parent) :
     QObject(parent), playerId_{playerId}, client_{client}, playingInformation_{new PlayingInformation{this}},
     playlistService_{new PlaylistService{client_, this}}
 {
-	timer_.setInterval(1000);
+	// Update four times a second. The old 1 Hz clock could visibly trail Kodi
+	// by almost a second even when the underlying position was correct.
+	timer_.setInterval(250);
 	connect(&timer_, &QTimer::timeout, this, &Player::updateTimer_);
+
+	seekRefreshTimer_.setInterval(350);
+	seekRefreshTimer_.setSingleShot(true);
+	connect(&seekRefreshTimer_, &QTimer::timeout, this, &Player::finishSeekRefresh_);
 }
 
 namespace
@@ -868,21 +905,34 @@ void Player::handleSeekResult_()
 	if (serial != seekRequestSerial_)
 		return; // an older seek finished after a newer one
 
-	seekInFlight_ = false;
 	const auto response = reply->response();
-	if (response.errorCode() != 0 || !response.result().isObject())
+	if (response.errorCode() == 0 && response.result().isObject())
 	{
-		refreshPlayerStatus();
-		return;
+		const auto result = response.result().toObject();
+		if (result.value("totaltime").isObject())
+			setTotalTime_(getTime_(result.value("totaltime").toObject()));
+		if (result.value("time").isObject())
+			setTime_(getTime_(result.value("time").toObject()));
+		else if (result.value("percentage").isDouble())
+			setPercentage_(result.value("percentage").toDouble());
 	}
 
-	const auto result = response.result().toObject();
-	if (result.value("totaltime").isObject())
-		setTotalTime_(getTime_(result.value("totaltime").toObject()));
-	if (result.value("time").isObject())
-		setTime_(getTime_(result.value("time").toObject()));
-	else if (result.value("percentage").isDouble())
-		setPercentage_(result.value("percentage").toDouble());
+	// Kodi can emit OnSeek and older GetProperties replies around the same
+	// time. Debounce them, then fetch one fresh authoritative state. This is
+	// equivalent to the refresh that previously only happened after Pause/Play.
+	scheduleStatusRefresh();
+}
+
+void Player::scheduleStatusRefresh()
+{
+	seekInFlight_ = true;
+	seekRefreshTimer_.start();
+}
+
+void Player::finishSeekRefresh_()
+{
+	seekInFlight_ = false;
+	refreshPlayerStatus();
 }
 
 void Player::seekBackward()
