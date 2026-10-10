@@ -259,7 +259,6 @@ Page {
             height: padCell
             onClicked: {
                 remoteController.up()
-                feedback()
             }
             Label {
                 anchors.centerIn: parent
@@ -290,7 +289,6 @@ Page {
             height: padCell
             onClicked: {
                 remoteController.left()
-                feedback()
             }
             Label {
                 anchors.centerIn: parent
@@ -308,7 +306,6 @@ Page {
             height: padCell
             onClicked: {
                 remoteController.select()
-                feedback()
             }
             Rectangle {
                 width: Math.min(parent.width, parent.height) * 0.56
@@ -336,7 +333,6 @@ Page {
             height: padCell
             onClicked: {
                 remoteController.right()
-                feedback()
             }
             Label {
                 anchors.centerIn: parent
@@ -367,7 +363,6 @@ Page {
             height: padCell
             onClicked: {
                 remoteController.down()
-                feedback()
             }
             Label {
                 anchors.centerIn: parent

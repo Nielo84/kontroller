@@ -110,8 +110,12 @@ Item {
 
     function getTime(player)
     {
-        if(player)
-            return Utils.formatMsecTime(player.time);
+        if(player) {
+            // Kodi's on-screen time effectively changes near the middle of the
+            // second, while flooring here made Kontroller look about one second
+            // behind. Round the displayed current time to the nearest second.
+            return Utils.formatMsecTime(player.time + 500);
+        }
         return "-";
     }
 
