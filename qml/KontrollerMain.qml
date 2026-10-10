@@ -295,6 +295,12 @@ Page {
             appClient.switchToServer(appSettings.lastServer)
         createInfoComponents()
         serverSettingsComponent_ = Qt.createComponent(Qt.resolvedUrl("ServerSettingsPage.qml"))
+
+        // The remote is the primary screen on Jolla Phone. Keep this menu page
+        // underneath it so the existing navigation and settings remain available.
+        Qt.callLater(function() {
+            pushRemotePage()
+        })
     }
 
     Connections {
