@@ -708,12 +708,12 @@ Player::Player(Client* client, int playerId, QObject* parent) :
     QObject(parent), playerId_{playerId}, client_{client}, playingInformation_{new PlayingInformation{this}},
     playlistService_{new PlaylistService{client_, this}}
 {
-	// Keep the local playback clock visually close to Kodi's on-screen clock.
-	// 100 ms updates avoid the visible quarter/whole-second lag of the older timer.
-	timer_.setInterval(100);
+	// Update four times a second. The old 1 Hz clock could visibly trail Kodi
+	// by almost a second even when the underlying position was correct.
+	timer_.setInterval(250);
 	connect(&timer_, &QTimer::timeout, this, &Player::updateTimer_);
 
-	seekRefreshTimer_.setInterval(150);
+	seekRefreshTimer_.setInterval(170);
 	seekRefreshTimer_.setSingleShot(true);
 	connect(&seekRefreshTimer_, &QTimer::timeout, this, &Player::finishSeekRefresh_);
 }
