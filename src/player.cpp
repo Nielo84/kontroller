@@ -547,7 +547,16 @@ void Player::refreshPlayerStatus()
 	QJsonRpcMessage message = QJsonRpcMessage::createRequest("Player.GetProperties", parameters);
 	auto reply = client_->send(message);
 	if (reply)
+	{
+		// A seek causes several overlapping refreshes: Player.OnSeek also carries
+		// a speed notification, and the Remote page refreshes again when the
+		// active-player signal fires. Tag every GetProperties request so a reply
+		// that was sent before/during the seek can never overwrite the new slider
+		// position after it arrives late.
+		reply->setProperty("statusSeekSerial", seekRequestSerial_);
+		reply->setProperty("statusSentDuringSeek", seekInFlight_);
 		connect(reply, &QJsonRpcServiceReply::finished, this, &Player::handlePlayerStatus_);
+	}
 }
 
 void Player::updateTimer_()
@@ -590,10 +599,17 @@ void Player::handlePlayerStatus_()
 				QString typ = typeVal.toString();
 				if (typ != type())
 					setType_(typ);
-				// During a seek an older GetProperties reply can arrive after the
-				// user moved the slider. Do not let that stale value pull the
-				// seek bar back; Player.Seek/OnSeek will supply the authoritative time.
-				if (!seekInFlight_)
+				// Only a GetProperties request started after the current seek has
+				// settled may update playback position. Requests sent before a seek,
+				// or the automatic speed/active-player refreshes fired during OnSeek,
+				// can otherwise arrive late and pull the slider back to its old place.
+				const int statusSeekSerial = reply->property("statusSeekSerial").toInt();
+				const bool statusSentDuringSeek = reply->property("statusSentDuringSeek").toBool();
+				const bool authoritativePosition =
+				        !seekInFlight_ &&
+				        statusSeekSerial == seekRequestSerial_ &&
+				        !statusSentDuringSeek;
+				if (authoritativePosition)
 				{
 					if (obj.value("time").isObject())
 						setTime_(getTime_(obj.value("time").toObject()));
