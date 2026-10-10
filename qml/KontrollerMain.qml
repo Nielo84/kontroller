@@ -7,6 +7,7 @@ import Sailfish.Media 1.0
 
 Page {
     id: main
+    property bool autoRemoteOpened: false
 
     Remote {
         id:remote
@@ -88,12 +89,6 @@ Page {
                     icon:"image://theme/icon-m-image"
                     needConnect: true
                     label: qsTr("Images")
-                }
-                ListElement {
-                    page:"current"
-                    icon:"image://theme/icon-m-accessory-speaker"
-                    needConnect:true
-                    label: qsTr("Current")
                 }
                 ListElement {
                     page:"remote"
@@ -252,10 +247,6 @@ Page {
         {
             internal.createImagePage({"file":"", "filetype":"", "label":qsTr("Sources")});
         }
-        else if(page === "current")
-        {
-            internal.createCurrentlyPlayingPage();
-        }
         else if(page === "remote")
         {
             pushRemotePage()
@@ -277,7 +268,7 @@ Page {
 
     function pushCurrentPage()
     {
-        pageStack.push(Qt.resolvedUrl("CurrentlyPlaying.qml"));
+        pushRemotePage();
     }
 
     function toMenu()
@@ -300,11 +291,32 @@ Page {
         }
     }
 
+    function openRemoteOnStartupIfReady()
+    {
+        if(autoRemoteOpened)
+            return;
+        if(appSettings.servers.length === 0)
+            return;
+        if(appClient.connectionStatus !== 2)
+            return;
+
+        autoRemoteOpened = true;
+        Qt.callLater(function() {
+            pushRemotePage()
+        })
+    }
+
     Component.onCompleted:{
         if(appSettings.lastServer.length > 0)
             appClient.switchToServer(appSettings.lastServer)
         createInfoComponents()
         serverSettingsComponent_ = Qt.createComponent(Qt.resolvedUrl("ServerSettingsPage.qml"))
+        openRemoteOnStartupIfReady()
+    }
+
+    Connections {
+        target: appClient
+        onConnectionStatusChanged: openRemoteOnStartupIfReady()
     }
 
     Connections {
@@ -316,6 +328,7 @@ Page {
                 appClient.switchToServer(server.uuid);
                 appSettings.lastServer = server.uuid
             }
+            openRemoteOnStartupIfReady()
         }
     }
 
@@ -326,6 +339,8 @@ Page {
         {
             appClient.retryConnect();
         }
+        if(status == PageStatus.Activating)
+            openRemoteOnStartupIfReady();
     }
 
     property var serverSettingsComponent_
@@ -342,7 +357,7 @@ Page {
 
     function pushCurrentlyPlaying()
     {
-        internal.createCurrentlyPlayingPage();
+        pushRemotePage();
     }
 
 }

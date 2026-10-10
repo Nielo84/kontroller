@@ -8,6 +8,7 @@
 
 #include <QObject>
 #include <QQmlListProperty>
+#include <QElapsedTimer>
 #include <QTimer>
 #include <QVector>
 
@@ -32,8 +33,12 @@ class Player : public QObject
 	double percentage_ = 0;
 	int totalTime_ = 0;
 	int time_ = 0;
+	int seekRequestSerial_ = 0;
+	bool seekInFlight_ = false;
 
 	QTimer timer_;
+	QTimer seekRefreshTimer_;
+	QElapsedTimer playbackElapsed_;
 
 	bool shuffled_ = false;
 	bool canMove_ = false;
@@ -150,6 +155,7 @@ public:
 	eu::tgcm::kontroller::PlaylistService* playlistService();
 
 	Q_INVOKABLE void stop();
+	Q_INVOKABLE void seekToTime(int timeMs);
 	Q_INVOKABLE void seekBackward();
 	Q_INVOKABLE void seekForward();
 	Q_INVOKABLE void playPause();
@@ -164,6 +170,9 @@ public:
 
 	// can be set from c++, but not from qml
 	void setActive(bool value);
+
+	// Debounced refresh used after Kodi seek notifications/replies.
+	void scheduleStatusRefresh();
 
 	/**
 	 * @brief updateProperty updates a single property, as received by a OnPropertyChanged
@@ -234,6 +243,7 @@ private slots:
 	void updateTimer_();
 
 	void handlePlayerStatus_();
+	void finishSeekRefresh_();
 
 private:
 	// these functions are the internal ones, used to alter the internal variables, received from the json rpc replies
@@ -261,6 +271,7 @@ private slots:
 	void handleSetAudioStreamResult_(QJsonRpcServiceReply* reply, int index);
 	void handleSetSubtitleResult_(QJsonRpcServiceReply* reply, int index);
 	void handlePlayPause_();
+	void handleSeekResult_();
 	void handleSetRepeatResult_(QJsonRpcServiceReply* reply, QString repeat);
 	void handleGetItemResponse_();
 

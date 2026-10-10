@@ -143,14 +143,24 @@ void Player::setSpeed(int speed)
 
 void Player::setSpeed_(int speed)
 {
-	if (speed == speed_)
-		return;
+	const bool changed = (speed != speed_);
 	speed_ = speed;
-	emit speedChanged();
-	if (speed == 0)
+	if (changed)
+		emit speedChanged();
+
+	// Keep the local progress clock strictly tied to Kodi's playback speed.
+	// Use a monotonic elapsed clock so QTimer scheduling jitter cannot make
+	// Kontroller slowly drift behind the TV.
+	if (speed_ == 0 || totalTime_ == 0)
+	{
 		timer_.stop();
+		playbackElapsed_.invalidate();
+	}
 	else
+	{
+		playbackElapsed_.start();
 		timer_.start();
+	}
 }
 
 int Player::playlistPosition() const
@@ -286,11 +296,21 @@ void Player::setPercentage_(double percentage)
 
 void Player::setTime_(int time)
 {
+	// Re-anchor the local clock whenever we receive or calculate a new
+	// playback position. This also keeps the displayed time tightly synced.
+	if (speed_ != 0 && totalTime_ > 0)
+		playbackElapsed_.start();
+	else
+		playbackElapsed_.invalidate();
+
 	if (time_ == time)
 		return;
 
 	time_ = time;
 	emit timeChanged(time);
+
+	if (totalTime_ > 0)
+		setPercentage_(100.0 * (double)time_ / (double)totalTime_);
 }
 
 void Player::setTotalTime_(int totalTime)
@@ -300,10 +320,20 @@ void Player::setTotalTime_(int totalTime)
 
 	totalTime_ = totalTime;
 	emit totalTimeChanged(totalTime);
-	if (totalTime != 0)
+
+	if (totalTime_ > 0)
+		setPercentage_(100.0 * (double)time_ / (double)totalTime_);
+
+	if (totalTime_ != 0 && speed_ != 0)
+	{
+		playbackElapsed_.start();
 		timer_.start();
+	}
 	else
+	{
 		timer_.stop();
+		playbackElapsed_.invalidate();
+	}
 }
 
 void Player::setShuffled_(bool shuffled)
@@ -517,15 +547,38 @@ void Player::refreshPlayerStatus()
 	QJsonRpcMessage message = QJsonRpcMessage::createRequest("Player.GetProperties", parameters);
 	auto reply = client_->send(message);
 	if (reply)
+	{
+		// A seek causes several overlapping refreshes: Player.OnSeek also carries
+		// a speed notification, and the Remote page refreshes again when the
+		// active-player signal fires. Tag every GetProperties request so a reply
+		// that was sent before/during the seek can never overwrite the new slider
+		// position after it arrives late.
+		reply->setProperty("statusSeekSerial", seekRequestSerial_);
+		reply->setProperty("statusSentDuringSeek", seekInFlight_);
 		connect(reply, &QJsonRpcServiceReply::finished, this, &Player::handlePlayerStatus_);
+	}
 }
 
 void Player::updateTimer_()
 {
-	time_ += timer_.interval();
-	if (totalTime_ != 0)
-		setPercentage_(100 * (double)time_ / (double)totalTime_);
-	emit timeChanged(time_);
+	if (speed_ == 0 || totalTime_ <= 0)
+		return;
+
+	if (!playbackElapsed_.isValid())
+	{
+		playbackElapsed_.start();
+		return;
+	}
+
+	// Add the real elapsed time instead of assuming every QTimer callback
+	// happened exactly on schedule.
+	const qint64 elapsed = playbackElapsed_.elapsed();
+	if (elapsed <= 0)
+		return;
+
+	int newTime = time_ + static_cast<int>(elapsed * speed_);
+	newTime = qBound(0, newTime, totalTime_);
+	setTime_(newTime);
 }
 
 void Player::handlePlayerStatus_()
@@ -546,11 +599,23 @@ void Player::handlePlayerStatus_()
 				QString typ = typeVal.toString();
 				if (typ != type())
 					setType_(typ);
-				// don't read percentage : we recompute it from time if available
-				if (obj.value("time").isObject())
-					setTime_(getTime_(obj.value("time").toObject()));
-				else if (obj.value("percentage").isDouble()) // read if time not available
-					setPercentage_((int)obj.value("percentage").toDouble());
+				// Only a GetProperties request started after the current seek has
+				// settled may update playback position. Requests sent before a seek,
+				// or the automatic speed/active-player refreshes fired during OnSeek,
+				// can otherwise arrive late and pull the slider back to its old place.
+				const int statusSeekSerial = reply->property("statusSeekSerial").toInt();
+				const bool statusSentDuringSeek = reply->property("statusSentDuringSeek").toBool();
+				const bool authoritativePosition =
+				        !seekInFlight_ &&
+				        statusSeekSerial == seekRequestSerial_ &&
+				        !statusSentDuringSeek;
+				if (authoritativePosition)
+				{
+					if (obj.value("time").isObject())
+						setTime_(getTime_(obj.value("time").toObject()));
+					else if (obj.value("percentage").isDouble()) // read if time not available
+						setPercentage_(obj.value("percentage").toDouble());
+				}
 				if (obj.value("totaltime").isObject())
 					setTotalTime_(getTime_(obj.value("totaltime").toObject()));
 				if (obj.value("speed").isDouble())
@@ -659,8 +724,14 @@ Player::Player(Client* client, int playerId, QObject* parent) :
     QObject(parent), playerId_{playerId}, client_{client}, playingInformation_{new PlayingInformation{this}},
     playlistService_{new PlaylistService{client_, this}}
 {
-	timer_.setInterval(1000);
+	// Update four times a second. The old 1 Hz clock could visibly trail Kodi
+	// by almost a second even when the underlying position was correct.
+	timer_.setInterval(250);
 	connect(&timer_, &QTimer::timeout, this, &Player::updateTimer_);
+
+	seekRefreshTimer_.setInterval(170);
+	seekRefreshTimer_.setSingleShot(true);
+	connect(&seekRefreshTimer_, &QTimer::timeout, this, &Player::finishSeekRefresh_);
 }
 
 namespace
@@ -774,6 +845,7 @@ void Player::refreshCurrentlyPlaying_()
 	QJsonArray properties;
 	properties.append("thumbnail");
 	properties.append("fanart");
+	properties.append("art");
 	properties.append("title");
 	properties.append("file");
 	properties.append("artistid");
@@ -792,14 +864,91 @@ void Player::refreshCurrentlyPlaying_()
 
 void Player::setPercentage(double percentage)
 {
+	const double target = qBound(0.0, percentage, 100.0);
+	if (totalTime_ > 0)
+		seekToTime((int)(totalTime_ * target / 100.0));
+}
+
+void Player::seekToTime(int timeMs)
+{
+	if (totalTime_ <= 0)
+		return;
+
+	const int target = qBound(0, timeMs, totalTime_);
+	const int serial = ++seekRequestSerial_;
+	seekInFlight_ = true;
+
+	// Reflect the user's chosen position immediately. The Player.Seek reply
+	// contains Kodi's exact time and will correct this if necessary.
+	setTime_(target);
+
+	int remaining = target;
+	QJsonObject timeValue;
+	timeValue.insert("hours", remaining / 3600000);
+	remaining %= 3600000;
+	timeValue.insert("minutes", remaining / 60000);
+	remaining %= 60000;
+	timeValue.insert("seconds", remaining / 1000);
+	timeValue.insert("milliseconds", remaining % 1000);
+
+	QJsonObject valueArg;
+	valueArg.insert("time", timeValue);
+
 	QJsonObject parameters;
 	parameters.insert("playerid", playerId_);
-	QJsonObject valueArg;
-	valueArg.insert("percentage", percentage);
 	parameters.insert("value", valueArg);
+
 	QJsonRpcMessage message = QJsonRpcMessage::createRequest("Player.Seek", parameters);
-	client_->send(message);
-	// don't handle result here : will be handled by a notification or the refresh
+	auto reply = client_->send(message);
+	if (reply)
+	{
+		reply->setProperty("seekSerial", serial);
+		connect(reply, &QJsonRpcServiceReply::finished, this, &Player::handleSeekResult_);
+	}
+	else
+	{
+		seekInFlight_ = false;
+	}
+}
+
+void Player::handleSeekResult_()
+{
+	auto reply = dynamic_cast<QJsonRpcServiceReply*>(sender());
+	if (!reply)
+		return;
+
+	const int serial = reply->property("seekSerial").toInt();
+	if (serial != seekRequestSerial_)
+		return; // an older seek finished after a newer one
+
+	const auto response = reply->response();
+	if (response.errorCode() == 0 && response.result().isObject())
+	{
+		const auto result = response.result().toObject();
+		if (result.value("totaltime").isObject())
+			setTotalTime_(getTime_(result.value("totaltime").toObject()));
+		if (result.value("time").isObject())
+			setTime_(getTime_(result.value("time").toObject()));
+		else if (result.value("percentage").isDouble())
+			setPercentage_(result.value("percentage").toDouble());
+	}
+
+	// Kodi can emit OnSeek and older GetProperties replies around the same
+	// time. Debounce them, then fetch one fresh authoritative state. This is
+	// equivalent to the refresh that previously only happened after Pause/Play.
+	scheduleStatusRefresh();
+}
+
+void Player::scheduleStatusRefresh()
+{
+	seekInFlight_ = true;
+	seekRefreshTimer_.start();
+}
+
+void Player::finishSeekRefresh_()
+{
+	seekInFlight_ = false;
+	refreshPlayerStatus();
 }
 
 void Player::seekBackward()
@@ -807,7 +956,7 @@ void Player::seekBackward()
 	QJsonObject parameters;
 	parameters.insert("playerid", playerId_);
 	QJsonObject valueArg;
-	valueArg.insert("percentage", QLatin1String("smallbackward"));
+	valueArg.insert("step", QLatin1String("smallbackward"));
 	parameters.insert("value", valueArg);
 	QJsonRpcMessage message = QJsonRpcMessage::createRequest("Player.Seek", parameters);
 	client_->send(message);
@@ -818,7 +967,7 @@ void Player::seekForward()
 	QJsonObject parameters;
 	parameters.insert("playerid", playerId_);
 	QJsonObject valueArg;
-	valueArg.insert("percentage", QLatin1String("smallforward"));
+	valueArg.insert("step", QLatin1String("smallforward"));
 	parameters.insert("value", valueArg);
 	QJsonRpcMessage message = QJsonRpcMessage::createRequest("Player.Seek", parameters);
 	client_->send(message);
@@ -911,7 +1060,27 @@ void Player::handleGetItemResponse_()
 			auto item = itemTmp.toObject();
 			item_.setFile(item.value("file").toString());
 			item_.setType(item.value("type").toString());
-			item_.setThumbnail(getImageUrl(client_, item.value("thumbnail").toString()).toString());
+
+			// Kodi often leaves the legacy "thumbnail" field empty for movies/episodes.
+			// Kore uses artwork.poster for those media types, so prefer the same source here.
+			QString thumbnail = item.value("thumbnail").toString();
+			auto art = item.value("art").toObject();
+			if (item_.type() == "movie" || item_.type() == "episode")
+			{
+				QString poster = art.value("poster").toString();
+				if (poster.isEmpty())
+					poster = art.value("tvshow.poster").toString();
+				if (poster.isEmpty())
+					poster = art.value("season.poster").toString();
+				if (!poster.isEmpty())
+					thumbnail = poster;
+			}
+			if (thumbnail.isEmpty())
+				thumbnail = art.value("thumb").toString();
+			if (thumbnail.isEmpty())
+				thumbnail = item.value("fanart").toString();
+
+			item_.setThumbnail(getImageUrl(client_, thumbnail).toString());
 			item_.setFanart(getImageUrl(client_, item.value("fanart").toString()).toString());
 			item_.setLabel(item.value("title").toString());
 			if (item_.type() == "song")

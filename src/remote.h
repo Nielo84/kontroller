@@ -28,6 +28,7 @@ signals:
 public slots:
 	void back();
 	void contextMenu();
+	void downloadSubtitles();
 	void down();
 	//void executeAction();
 	void home();

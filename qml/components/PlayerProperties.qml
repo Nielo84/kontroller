@@ -5,6 +5,12 @@ import Sailfish.Silica 1.0
 
 Item {
     property var player
+    property string mode: "all"
+
+    Remote {
+        id: remoteController
+        client: appClient
+    }
     implicitHeight: theCol.height
     Column {
         anchors.top: parent.top
@@ -13,7 +19,7 @@ Item {
         spacing: Theme.paddingSmall
         id:theCol
         ComboBox {
-            visible: player && player.type === "video" && player.subtitles.length > 0
+            visible: player && player.type === "video" && (mode === "all" || mode === "subtitles")
             id:cbxSubs
             label:qsTr("Subtitles")
             clip:true
@@ -26,26 +32,21 @@ Item {
                         onClicked: if(player) { player.currentSubtitleIndex = model.modelData.index; }
                     }
                 }
+                MenuItem {
+                    text: qsTr("Download subtitles…")
+                    onClicked: remoteController.downloadSubtitles()
+                }
             }
             currentIndex: -1
-            value: ""
+            value: player && player.subtitles.length === 0 ? qsTr("No subtitles available") : ""
             Component.onCompleted: { console.log("height is " + height); }
-        }
-        Label {
-            visible: player && player.type === "video" && player.subtitles.length === 0
-            text: qsTr("No subtitles available")
-            anchors.left: parent.left
-            anchors.leftMargin: Theme.horizontalPageMargin
-            anchors.right: parent.right
-            anchors.rightMargin: Theme.horizontalPageMargin
-            color: Theme.highlightColor
         }
 
         ComboBox {
             id:cbxStreams
             label:qsTr("Audio")
             clip:true
-            visible: player && player.type === "video"
+            visible: player && player.type === "video" && (mode === "all" || mode === "audio")
             menu:ContextMenu {
                 Repeater {
                     id:streamsRptr
@@ -59,6 +60,7 @@ Item {
             value:""
         }
         Row {
+            visible: mode === "all"
             anchors.left: parent.left
             anchors.right: parent.right
             height:repeatSwitch.height

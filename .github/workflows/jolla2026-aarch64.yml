@@ -1,0 +1,28 @@
+name: Jolla 2026 aarch64 test build
+
+on:
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build-aarch64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - name: Build Sailfish OS 5 aarch64 RPM
+        uses: CODeRUS/github-sfos-build@sfos5
+        with:
+          release: 5.0.0.43
+          arch: aarch64
+
+      - name: Upload aarch64 RPM
+        uses: actions/upload-artifact@v5
+        with:
+          name: harbour-kontroller-jolla2026-aarch64
+          path: |
+            RPMS/*.rpm
+            RPMS/**/*.rpm
