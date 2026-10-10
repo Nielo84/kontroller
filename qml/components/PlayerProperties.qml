@@ -5,6 +5,7 @@ import Sailfish.Silica 1.0
 
 Item {
     property var player
+    property string mode: "all"
 
     Remote {
         id: remoteController
@@ -18,7 +19,7 @@ Item {
         spacing: Theme.paddingSmall
         id:theCol
         ComboBox {
-            visible: player && player.type === "video"
+            visible: player && player.type === "video" && (mode === "all" || mode === "subtitles")
             id:cbxSubs
             label:qsTr("Subtitles")
             clip:true
@@ -45,7 +46,7 @@ Item {
             id:cbxStreams
             label:qsTr("Audio")
             clip:true
-            visible: player && player.type === "video"
+            visible: player && player.type === "video" && (mode === "all" || mode === "audio")
             menu:ContextMenu {
                 Repeater {
                     id:streamsRptr
@@ -59,6 +60,7 @@ Item {
             value:""
         }
         Row {
+            visible: mode === "all"
             anchors.left: parent.left
             anchors.right: parent.right
             height:repeatSwitch.height

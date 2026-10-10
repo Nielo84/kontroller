@@ -13,6 +13,8 @@ Page {
     property bool hidePanel: true
     property int initialRefreshAttempts: 0
     property bool propertiesExpanded: false
+    property string propertyPanelMode: ""
+    property bool powerMenuVisible: false
     property var shutdownRemorse: null
 
     // Keep the remote compact like Kore: the navigation pad occupies about
@@ -90,6 +92,62 @@ Page {
         return ""
     }
 
+    function languageCode(value) {
+        if (!value)
+            return ""
+        var clean = ("" + value).trim()
+        if (clean.length === 0)
+            return ""
+        return clean.substring(0, Math.min(3, clean.length)).toUpperCase()
+    }
+
+    function activeAudioText() {
+        if (!player || !player.audioStreams)
+            return qsTr("AUDIO")
+        for (var i = 0; i < player.audioStreams.length; ++i) {
+            var stream = player.audioStreams[i]
+            if (stream && stream.index === player.currentAudioStreamIndex) {
+                var lang = languageCode(stream.language)
+                var name = stream.name ? ("" + stream.name).trim() : ""
+                if (lang.length > 0 && name.length > 0 && name.toUpperCase() !== lang)
+                    return lang + " · " + name
+                if (lang.length > 0)
+                    return lang
+                if (name.length > 0)
+                    return name
+            }
+        }
+        return qsTr("AUDIO")
+    }
+
+    function activeSubtitleText() {
+        if (!player || player.currentSubtitleIndex < 0)
+            return qsTr("OFF")
+        if (!player.subtitles)
+            return qsTr("SUBS")
+        for (var i = 0; i < player.subtitles.length; ++i) {
+            var sub = player.subtitles[i]
+            if (sub && sub.index === player.currentSubtitleIndex) {
+                var lang = languageCode(sub.language)
+                var name = sub.name ? ("" + sub.name).trim() : ""
+                if (lang.length > 0 && name.length > 0 && name.toUpperCase() !== lang)
+                    return lang + " · " + name
+                if (lang.length > 0)
+                    return lang
+                if (name.length > 0)
+                    return name
+            }
+        }
+        return qsTr("SUBS")
+    }
+
+    function togglePropertyPanel(mode) {
+        if (propertyPanelMode === mode)
+            propertyPanelMode = ""
+        else
+            propertyPanelMode = mode
+    }
+
     SilicaFlickable {
         id: upperPanel
         anchors.top: parent.top
@@ -135,21 +193,33 @@ Page {
                     anchors.verticalCenter: parent.verticalCenter
                     width: Theme.itemSizeSmall
                     height: Theme.itemSizeSmall
-                    enabled: appClient && appClient.server && appClient.server.poweroffEnabled
-                    onClicked: {
-                        shutdownRemorse = Remorse.popupAction(
-                                    page,
-                                    qsTr("Shutdown server"),
-                                    function() { systemService.shutdownServer() })
-                    }
+                    enabled: appClient && appClient.server
+                    onClicked: powerMenuVisible = !powerMenuVisible
 
-                    Label {
+                    // Draw a proper power symbol instead of relying on a font glyph.
+                    Item {
                         anchors.centerIn: parent
-                        text: "⏻"
-                        font.pixelSize: Theme.fontSizeHuge
-                        color: powerButton.enabled ?
-                                   (powerButton.highlighted ? Theme.highlightColor : Theme.primaryColor) :
-                                   Theme.secondaryColor
+                        width: Theme.iconSizeMedium
+                        height: Theme.iconSizeMedium
+
+                        Rectangle {
+                            width: parent.width * 0.72
+                            height: width
+                            radius: width / 2
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.bottom: parent.bottom
+                            color: "transparent"
+                            border.width: Math.max(2, Theme.paddingSmall / 3)
+                            border.color: powerButton.highlighted ? Theme.highlightColor : Theme.primaryColor
+                        }
+                        Rectangle {
+                            width: Math.max(3, Theme.paddingSmall / 2)
+                            height: parent.height * 0.56
+                            radius: width / 2
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.top: parent.top
+                            color: powerButton.highlighted ? Theme.highlightColor : Theme.primaryColor
+                        }
                     }
                 }
             }
@@ -222,6 +292,143 @@ Page {
                     }
 
                     Row {
+                        id: streamSelectors
+                        width: parent.width
+                        height: player && player.type === "video" ? Theme.itemSizeSmall : 0
+                        visible: player && player.type === "video"
+                        spacing: Theme.paddingSmall
+
+                        BackgroundItem {
+                            id: audioField
+                            width: (parent.width - parent.spacing) / 2
+                            height: Theme.itemSizeSmall
+                            onClicked: togglePropertyPanel("audio")
+
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: Theme.paddingSmall
+                                color: propertyPanelMode === "audio" ?
+                                           Theme.rgba(Theme.highlightColor, 0.20) :
+                                           Theme.rgba(Theme.primaryColor, 0.08)
+                                border.width: 1
+                                border.color: propertyPanelMode === "audio" ?
+                                                  Theme.highlightColor : Theme.secondaryColor
+                            }
+
+                            Row {
+                                anchors.fill: parent
+                                anchors.leftMargin: Theme.paddingSmall
+                                anchors.rightMargin: Theme.paddingSmall
+                                spacing: Theme.paddingSmall
+
+                                Rectangle {
+                                    width: Theme.iconSizeSmall
+                                    height: Theme.iconSizeSmall
+                                    radius: width / 2
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    color: "transparent"
+                                    border.width: 2
+                                    border.color: Theme.primaryColor
+
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "A"
+                                        font.bold: true
+                                        font.pixelSize: Theme.fontSizeSmall
+                                    }
+                                }
+
+                                Column {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: parent.width - Theme.iconSizeSmall - parent.spacing
+                                    spacing: 0
+                                    Label {
+                                        width: parent.width
+                                        text: qsTr("Audio")
+                                        font.pixelSize: Theme.fontSizeExtraSmall
+                                        color: Theme.secondaryColor
+                                    }
+                                    Label {
+                                        width: parent.width
+                                        text: activeAudioText()
+                                        font.pixelSize: Theme.fontSizeSmall
+                                        font.bold: true
+                                        truncationMode: TruncationMode.Fade
+                                    }
+                                }
+                            }
+                        }
+
+                        BackgroundItem {
+                            id: subtitleField
+                            width: (parent.width - parent.spacing) / 2
+                            height: Theme.itemSizeSmall
+                            onClicked: togglePropertyPanel("subtitles")
+
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: Theme.paddingSmall
+                                color: propertyPanelMode === "subtitles" ?
+                                           Theme.rgba(Theme.highlightColor, 0.20) :
+                                           Theme.rgba(Theme.primaryColor, 0.08)
+                                border.width: 1
+                                border.color: propertyPanelMode === "subtitles" ?
+                                                  Theme.highlightColor : Theme.secondaryColor
+                            }
+
+                            Row {
+                                anchors.fill: parent
+                                anchors.leftMargin: Theme.paddingSmall
+                                anchors.rightMargin: Theme.paddingSmall
+                                spacing: Theme.paddingSmall
+
+                                Rectangle {
+                                    width: Theme.iconSizeSmall * 1.25
+                                    height: Theme.iconSizeSmall
+                                    radius: Theme.paddingSmall / 2
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    color: "transparent"
+                                    border.width: 2
+                                    border.color: Theme.primaryColor
+
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "CC"
+                                        font.bold: true
+                                        font.pixelSize: Theme.fontSizeExtraSmall
+                                    }
+                                }
+
+                                Column {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: parent.width - Theme.iconSizeSmall * 1.25 - parent.spacing
+                                    spacing: 0
+                                    Label {
+                                        width: parent.width
+                                        text: qsTr("Subtitles")
+                                        font.pixelSize: Theme.fontSizeExtraSmall
+                                        color: Theme.secondaryColor
+                                    }
+                                    Label {
+                                        width: parent.width
+                                        text: activeSubtitleText()
+                                        font.pixelSize: Theme.fontSizeSmall
+                                        font.bold: true
+                                        truncationMode: TruncationMode.Fade
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    PlayerProperties {
+                        width: parent.width
+                        player: page.player
+                        mode: propertyPanelMode
+                        visible: propertyPanelMode !== ""
+                    }
+
+                    Row {
                         width: parent.width
                         height: volumeControl.height
                         spacing: Theme.paddingSmall
@@ -255,13 +462,18 @@ Page {
                             width: Theme.itemSizeSmall
                             height: volumeControl.height
                             icon.source: "image://theme/icon-m-menu"
-                            onClicked: propertiesExpanded = !propertiesExpanded
+                            onClicked: {
+                                propertiesExpanded = !propertiesExpanded
+                                if (propertiesExpanded)
+                                    propertyPanelMode = ""
+                            }
                         }
                     }
 
                     PlayerProperties {
                         width: parent.width
                         player: page.player
+                        mode: "all"
                         visible: propertiesExpanded
                     }
                 }
@@ -300,6 +512,95 @@ Page {
         startInitialPlayerRefresh()
         if (appClient.volumePlugin)
             appClient.volumePlugin.refreshVolume()
+    }
+
+    Rectangle {
+        id: powerMenu
+        z: 100
+        visible: powerMenuVisible
+        anchors.top: parent.top
+        anchors.topMargin: Theme.itemSizeMedium
+        anchors.right: parent.right
+        anchors.rightMargin: Theme.paddingMedium
+        width: Math.min(page.width * 0.66, Theme.itemSizeHuge * 3.2)
+        height: powerMenuColumn.height
+        radius: Theme.paddingMedium
+        color: Theme.rgba(Theme.highlightBackgroundColor, 0.98)
+        border.width: 1
+        border.color: Theme.highlightColor
+
+        Column {
+            id: powerMenuColumn
+            width: parent.width
+
+            BackgroundItem {
+                width: parent.width
+                height: Theme.itemSizeMedium
+                visible: appClient && appClient.server && appClient.server.poweroffEnabled
+                onClicked: {
+                    powerMenuVisible = false
+                    shutdownRemorse = Remorse.popupAction(page, qsTr("Shutdown Kodi"),
+                                                          function() { systemService.shutdownServer() })
+                }
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    anchors.leftMargin: Theme.paddingMedium
+                    text: qsTr("⏻  Shutdown")
+                }
+            }
+
+            BackgroundItem {
+                width: parent.width
+                height: Theme.itemSizeMedium
+                visible: appClient && appClient.server && appClient.server.rebootEnabled
+                onClicked: {
+                    powerMenuVisible = false
+                    shutdownRemorse = Remorse.popupAction(page, qsTr("Restart Kodi"),
+                                                          function() { systemService.rebootServer() })
+                }
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    anchors.leftMargin: Theme.paddingMedium
+                    text: qsTr("↻  Restart")
+                }
+            }
+
+            BackgroundItem {
+                width: parent.width
+                height: Theme.itemSizeMedium
+                visible: appClient && appClient.server && appClient.server.suspendEnabled
+                onClicked: {
+                    powerMenuVisible = false
+                    shutdownRemorse = Remorse.popupAction(page, qsTr("Suspend Kodi"),
+                                                          function() { systemService.suspendServer() })
+                }
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    anchors.leftMargin: Theme.paddingMedium
+                    text: qsTr("Ⅱ  Suspend")
+                }
+            }
+
+            BackgroundItem {
+                width: parent.width
+                height: Theme.itemSizeMedium
+                visible: appClient && appClient.server && appClient.server.hibernateEnabled
+                onClicked: {
+                    powerMenuVisible = false
+                    shutdownRemorse = Remorse.popupAction(page, qsTr("Hibernate Kodi"),
+                                                          function() { systemService.hibernateServer() })
+                }
+                Label {
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.left: parent.left
+                    anchors.leftMargin: Theme.paddingMedium
+                    text: qsTr("◐  Hibernate")
+                }
+            }
+        }
     }
 
     // Compact Kore-inspired 3x3 pad:

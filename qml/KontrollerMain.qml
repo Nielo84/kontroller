@@ -7,6 +7,7 @@ import Sailfish.Media 1.0
 
 Page {
     id: main
+    property bool autoRemoteOpened: false
 
     Remote {
         id:remote
@@ -290,17 +291,32 @@ Page {
         }
     }
 
+    function openRemoteOnStartupIfReady()
+    {
+        if(autoRemoteOpened)
+            return;
+        if(appSettings.servers.length === 0)
+            return;
+        if(appClient.connectionStatus !== 2)
+            return;
+
+        autoRemoteOpened = true;
+        Qt.callLater(function() {
+            pushRemotePage()
+        })
+    }
+
     Component.onCompleted:{
         if(appSettings.lastServer.length > 0)
             appClient.switchToServer(appSettings.lastServer)
         createInfoComponents()
         serverSettingsComponent_ = Qt.createComponent(Qt.resolvedUrl("ServerSettingsPage.qml"))
+        openRemoteOnStartupIfReady()
+    }
 
-        // The remote is the primary screen on Jolla Phone. Keep this menu page
-        // underneath it so the existing navigation and settings remain available.
-        Qt.callLater(function() {
-            pushRemotePage()
-        })
+    Connections {
+        target: appClient
+        onConnectionStatusChanged: openRemoteOnStartupIfReady()
     }
 
     Connections {
@@ -312,6 +328,7 @@ Page {
                 appClient.switchToServer(server.uuid);
                 appSettings.lastServer = server.uuid
             }
+            openRemoteOnStartupIfReady()
         }
     }
 
@@ -322,6 +339,8 @@ Page {
         {
             appClient.retryConnect();
         }
+        if(status == PageStatus.Activating)
+            openRemoteOnStartupIfReady();
     }
 
     property var serverSettingsComponent_
