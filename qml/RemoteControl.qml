@@ -235,7 +235,6 @@ Page {
         anchors.bottomMargin: Theme.paddingSmall
         contentHeight: contentColumn.height
         clip: true
-        interactive: propertyPanelMode === "" && !propertiesExpanded
 
         Column {
             id: contentColumn
@@ -297,11 +296,10 @@ Page {
                         }
                         Rectangle {
                             width: Math.max(3, Theme.paddingSmall / 2)
-                            height: parent.height * 0.36
+                            height: parent.height * 0.56
                             radius: width / 2
                             anchors.horizontalCenter: parent.horizontalCenter
                             anchors.top: parent.top
-                            anchors.topMargin: parent.height * 0.08
                             color: powerButton.highlighted ? Theme.highlightColor : Theme.primaryColor
                         }
                     }
@@ -740,26 +738,12 @@ Page {
                 wrapMode: Text.Wrap
             }
 
-            Rectangle {
+            TextField {
+                id: kodiInputField
                 width: parent.width
-                height: kodiInputField.height
-                radius: Theme.paddingSmall
-                color: Theme.rgba(Theme.primaryColor, 0.10)
-                border.width: 1
-                border.color: kodiInputField.activeFocus ? Theme.highlightColor : Theme.secondaryColor
-
-                TextField {
-                    id: kodiInputField
-                    anchors.fill: parent
-                    anchors.leftMargin: Theme.paddingSmall
-                    anchors.rightMargin: Theme.paddingSmall
-                    text: kodiInputValue
-                    placeholderText: qsTr("Enter text for Kodi")
-                    color: Theme.primaryColor
-                    selectionColor: Theme.highlightColor
-                    selectedTextColor: Theme.primaryColor
-                    inputMethodHints: kodiInputType === "password" ? Qt.ImhHiddenText : Qt.ImhNone
-                }
+                text: kodiInputValue
+                placeholderText: qsTr("Enter text for Kodi")
+                inputMethodHints: kodiInputType === "password" ? Qt.ImhHiddenText : Qt.ImhNone
             }
 
             Row {
@@ -825,31 +809,14 @@ Page {
             }
         }
 
-        BackgroundItem {
+        IconButton {
             id: infoButton
             x: padCell * 2
             y: 0
             width: padCell
             height: padCell
+            icon.source: "image://theme/icon-m-question"
             onClicked: remoteController.info()
-
-            Rectangle {
-                width: Theme.iconSizeMedium
-                height: width
-                radius: width / 2
-                anchors.centerIn: parent
-                color: "transparent"
-                border.width: 2
-                border.color: infoButton.highlighted ? Theme.highlightColor : Theme.primaryColor
-
-                Label {
-                    anchors.centerIn: parent
-                    text: "i"
-                    font.bold: true
-                    font.pixelSize: Theme.fontSizeMedium
-                    color: infoButton.highlighted ? Theme.highlightColor : Theme.primaryColor
-                }
-            }
         }
 
         Item {

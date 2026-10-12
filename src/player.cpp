@@ -457,22 +457,22 @@ void Player::handleSetAudioStreamResult_(QJsonRpcServiceReply* reply, int index)
 {
 	if (!reply)
 		return;
-	if (reply->response().result().isString() &&
-	    reply->response().result().toString() == "OK")
-		setCurrentAudioStreamIndex_(index);
-
-	// Always ask Kodi for the authoritative state after the command.
-	refreshPlayerStatus();
+	if (reply->response().result().isString())
+	{
+		if (reply->response().result().toString() == "OK")
+			setCurrentAudioStreamIndex_(index);
+	}
 }
 
 void Player::handleSetSubtitleResult_(QJsonRpcServiceReply* reply, int index)
 {
-	if (reply && reply->response().result().isString() &&
-	    reply->response().result().toString() == "OK")
-		setCurrentSubtitleIndex_(index);
-
-	// Always ask Kodi for the authoritative state after the command.
-	refreshPlayerStatus();
+	if (reply && reply->response().result().isString())
+	{
+		if (reply->response().result().toString() == "OK")
+		{
+			setCurrentSubtitleIndex_(index);
+		}
+	}
 }
 
 void Player::handlePlayPause_()
@@ -1016,9 +1016,6 @@ void Player::setRepeat(int repeat)
 
 void Player::setCurrentSubtitleIndex(int index)
 {
-	// Update the UI immediately. Kodi's reply/refresh will correct us if needed.
-	setCurrentSubtitleIndex_(index);
-
 	QJsonObject parameters;
 	parameters.insert("playerid", playerId_);
 	if (index == -1)
@@ -1040,9 +1037,6 @@ void Player::setCurrentSubtitleIndex(int index)
 
 void Player::setCurrentAudioStreamIndex(int index)
 {
-	// Update the UI immediately. Kodi's reply/refresh will correct us if needed.
-	setCurrentAudioStreamIndex_(index);
-
 	QJsonObject parameters;
 	parameters.insert("playerid", playerId_);
 	parameters.insert("stream", index);
