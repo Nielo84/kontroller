@@ -1,5 +1,4 @@
 import QtQuick 2.6
-import QtFeedback 5.0
 import harbour.eu.tgcm 1.0
 import Sailfish.Silica 1.0
 import "."
@@ -15,57 +14,55 @@ Page {
     property bool propertiesExpanded: false
     property string propertyPanelMode: ""
     property bool powerMenuVisible: false
+    property bool drawerVisible: false
+    property bool kodiInputVisible: false
+    property string kodiInputTitle: ""
+    property string kodiInputType: ""
+    property string kodiInputValue: ""
     property var shutdownRemorse: null
 
-    // Keep the remote compact like Kore: the navigation pad occupies about
-    // two thirds of the screen width, with the corner actions close to it.
+    // Kore-like compact pad, lifted from the very bottom for easier thumb use.
     property int padSize: Math.floor(page.width * 0.68)
     property int padCell: Math.floor(padSize / 3)
+    property string repeatDirection: ""
 
     function syncActivePlayer() {
+        if (!appClient || !appClient.playerService)
+            return
         player = appClient.playerService.activePlayer
         if (player)
             player.refreshPlayerStatus()
     }
 
     function startInitialPlayerRefresh() {
+        if (!appClient || !appClient.playerService)
+            return
         initialRefreshAttempts = 0
         syncActivePlayer()
         appClient.playerService.refreshPlayerInfo()
         initialPlayerRefresh.restart()
     }
 
-    Timer {
-        id: initialPlayerRefresh
-        interval: 500
-        repeat: true
-        onTriggered: {
-            initialRefreshAttempts++
-            syncActivePlayer()
-            appClient.playerService.refreshPlayerInfo()
-            if ((player && player.type !== "") || initialRefreshAttempts >= 8)
-                stop()
-        }
+    function sendDirection(direction) {
+        if (direction === "up")
+            remoteController.up()
+        else if (direction === "down")
+            remoteController.down()
+        else if (direction === "left")
+            remoteController.left()
+        else if (direction === "right")
+            remoteController.right()
     }
 
-    Remote {
-        id: remoteController
-        client: appClient
+    function startDirection(direction) {
+        sendDirection(direction)
+        repeatDirection = direction
+        navigationRepeat.restart()
     }
 
-    SystemService {
-        id: systemService
-        client: appClient
-    }
-
-    HapticsEffect {
-        id: commandFeedback
-        intensity: 0.5
-        duration: 70
-    }
-
-    function feedback() {
-        commandFeedback.start()
+    function stopDirection() {
+        navigationRepeat.stop()
+        repeatDirection = ""
     }
 
     function getMainDisplay(item) {
@@ -103,7 +100,7 @@ Page {
 
     function activeAudioText() {
         if (!player || !player.audioStreams)
-            return qsTr("AUDIO")
+            return qsTr("Unknown")
         for (var i = 0; i < player.audioStreams.length; ++i) {
             var stream = player.audioStreams[i]
             if (stream && stream.index === player.currentAudioStreamIndex) {
@@ -117,14 +114,14 @@ Page {
                     return name
             }
         }
-        return qsTr("AUDIO")
+        return qsTr("Unknown")
     }
 
     function activeSubtitleText() {
         if (!player || player.currentSubtitleIndex < 0)
             return qsTr("OFF")
         if (!player.subtitles)
-            return qsTr("SUBS")
+            return qsTr("Unknown")
         for (var i = 0; i < player.subtitles.length; ++i) {
             var sub = player.subtitles[i]
             if (sub && sub.index === player.currentSubtitleIndex) {
@@ -138,14 +135,95 @@ Page {
                     return name
             }
         }
-        return qsTr("SUBS")
+        return qsTr("Unknown")
     }
 
     function togglePropertyPanel(mode) {
-        if (propertyPanelMode === mode)
-            propertyPanelMode = ""
-        else
-            propertyPanelMode = mode
+        propertiesExpanded = false
+        propertyPanelMode = propertyPanelMode === mode ? "" : mode
+    }
+
+    function createInfoComponents() {
+        internal.informationPageComponents = {}
+        var components = [
+            {"type":"album", "component":"AlbumInformationPage"},
+            {"type":"artist", "component":"ArtistInformationPage"},
+            {"type":"episode", "component":"EpisodeInformationPage"},
+            {"type":"movie", "component":"MovieInformationPage"},
+            {"type":"season", "component":"SeasonInformationPage"},
+            {"type":"tvshow", "component":"TvShowInformationPage"}
+        ]
+        for (var i = 0; i < components.length; ++i) {
+            var comp = Qt.createComponent(components[i].component + ".qml")
+            internal.informationPageComponents[components[i].type] = comp
+        }
+    }
+
+    function closeDrawer() {
+        drawerVisible = false
+    }
+
+    function pushRelevantPage(target) {
+        closeDrawer()
+        if (target === "music")
+            internal.createMusicPage({"file":"", "filetype":"", "label":qsTr("Sources")})
+        else if (target === "videos")
+            internal.createVideoPage({"file":"", "filetype":"", "label":qsTr("Sources")})
+        else if (target === "images")
+            internal.createImagePage({"file":"", "filetype":"", "label":qsTr("Sources")})
+        else if (target === "playlist")
+            pageStack.push(Qt.resolvedUrl("PlaylistPage.qml"))
+        else if (target === "server")
+            pageStack.push(Qt.resolvedUrl("ServerPage.qml"))
+        else if (target === "settings")
+            pageStack.push(Qt.resolvedUrl("SettingsPage.qml"))
+        else if (target === "switch")
+            pageStack.push(Qt.resolvedUrl("ServerSelectionPage.qml"))
+    }
+
+    // PageFactory callbacks.
+    function pushRemotePage() {}
+    function pushCurrentPage() {}
+    function toMenu() {
+        drawerVisible = true
+    }
+
+    Timer {
+        id: initialPlayerRefresh
+        interval: 500
+        repeat: true
+        onTriggered: {
+            initialRefreshAttempts++
+            syncActivePlayer()
+            if (appClient && appClient.playerService)
+                appClient.playerService.refreshPlayerInfo()
+            if ((player && player.type !== "") || initialRefreshAttempts >= 8)
+                stop()
+        }
+    }
+
+    Timer {
+        id: navigationRepeat
+        interval: 115
+        repeat: true
+        onTriggered: {
+            if (repeatDirection !== "")
+                sendDirection(repeatDirection)
+        }
+    }
+
+    Remote {
+        id: remoteController
+        client: appClient
+    }
+
+    SystemService {
+        id: systemService
+        client: appClient
+    }
+
+    PageFactory {
+        id: internal
     }
 
     SilicaFlickable {
@@ -163,45 +241,49 @@ Page {
             width: parent.width
             spacing: Theme.paddingSmall
 
-            // Compact Kore-like top bar.
+            // Kore-like toolbar: hamburger left, title compact, power right.
             Item {
                 width: parent.width
                 height: Theme.itemSizeMedium
 
-                Label {
+                IconButton {
+                    id: hamburgerButton
                     anchors.left: parent.left
-                    anchors.leftMargin: Theme.horizontalPageMargin
+                    anchors.leftMargin: Theme.paddingSmall
+                    anchors.verticalCenter: parent.verticalCenter
+                    icon.source: "image://theme/icon-m-menu"
+                    onClicked: {
+                        powerMenuVisible = false
+                        drawerVisible = !drawerVisible
+                    }
+                }
+
+                Label {
+                    anchors.left: hamburgerButton.right
+                    anchors.leftMargin: Theme.paddingSmall
                     anchors.verticalCenter: parent.verticalCenter
                     text: qsTr("Remote")
                     font.pixelSize: Theme.fontSizeLarge
                     color: Theme.primaryColor
                 }
 
-                IconButton {
-                    id: serverMenuButton
-                    anchors.right: parent.right
-                    anchors.rightMargin: Theme.paddingSmall
-                    anchors.verticalCenter: parent.verticalCenter
-                    icon.source: "image://theme/icon-m-menu"
-                    onClicked: pageStack.push(Qt.resolvedUrl("ServerPage.qml"))
-                }
-
                 BackgroundItem {
                     id: powerButton
-                    anchors.right: serverMenuButton.left
-                    anchors.rightMargin: Theme.paddingSmall
+                    anchors.right: parent.right
+                    anchors.rightMargin: Theme.paddingMedium
                     anchors.verticalCenter: parent.verticalCenter
                     width: Theme.itemSizeSmall
                     height: Theme.itemSizeSmall
                     enabled: appClient && appClient.server
-                    onClicked: powerMenuVisible = !powerMenuVisible
+                    onClicked: {
+                        drawerVisible = false
+                        powerMenuVisible = !powerMenuVisible
+                    }
 
-                    // Draw a proper power symbol instead of relying on a font glyph.
                     Item {
                         anchors.centerIn: parent
                         width: Theme.iconSizeMedium
                         height: Theme.iconSizeMedium
-
                         Rectangle {
                             width: parent.width * 0.72
                             height: width
@@ -224,8 +306,6 @@ Page {
                 }
             }
 
-            // Compact now-playing card. Extra player properties stay available,
-            // but are collapsed by default to keep the remote clean.
             Rectangle {
                 id: playerCard
                 width: parent.width - 2 * Theme.horizontalPageMargin
@@ -274,7 +354,6 @@ Page {
                                 font.bold: true
                                 truncationMode: TruncationMode.Fade
                             }
-
                             Label {
                                 width: parent.width
                                 text: player ? getSubDisplay(player.playingInformation.currentItem) : ""
@@ -291,131 +370,57 @@ Page {
                         showLabel: false
                     }
 
+                    // Plain, aligned text instead of the two boxed selectors from build 20.
                     Row {
-                        id: streamSelectors
                         width: parent.width
                         height: player && player.type === "video" ? Theme.itemSizeSmall : 0
                         visible: player && player.type === "video"
-                        spacing: Theme.paddingSmall
+                        spacing: Theme.paddingMedium
 
                         BackgroundItem {
-                            id: audioField
                             width: (parent.width - parent.spacing) / 2
                             height: Theme.itemSizeSmall
                             onClicked: togglePropertyPanel("audio")
-
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: Theme.paddingSmall
-                                color: propertyPanelMode === "audio" ?
-                                           Theme.rgba(Theme.highlightColor, 0.20) :
-                                           Theme.rgba(Theme.primaryColor, 0.08)
-                                border.width: 1
-                                border.color: propertyPanelMode === "audio" ?
-                                                  Theme.highlightColor : Theme.secondaryColor
-                            }
-
                             Row {
-                                anchors.fill: parent
-                                anchors.leftMargin: Theme.paddingSmall
-                                anchors.rightMargin: Theme.paddingSmall
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width
                                 spacing: Theme.paddingSmall
-
-                                Rectangle {
-                                    width: Theme.iconSizeSmall
-                                    height: Theme.iconSizeSmall
-                                    radius: width / 2
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    color: "transparent"
-                                    border.width: 2
-                                    border.color: Theme.primaryColor
-
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "A"
-                                        font.bold: true
-                                        font.pixelSize: Theme.fontSizeSmall
-                                    }
+                                Label {
+                                    text: qsTr("Audio:")
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    color: Theme.secondaryColor
                                 }
-
-                                Column {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: parent.width - Theme.iconSizeSmall - parent.spacing
-                                    spacing: 0
-                                    Label {
-                                        width: parent.width
-                                        text: qsTr("Audio")
-                                        font.pixelSize: Theme.fontSizeExtraSmall
-                                        color: Theme.secondaryColor
-                                    }
-                                    Label {
-                                        width: parent.width
-                                        text: activeAudioText()
-                                        font.pixelSize: Theme.fontSizeSmall
-                                        font.bold: true
-                                        truncationMode: TruncationMode.Fade
-                                    }
+                                Label {
+                                    width: parent.width - x
+                                    text: activeAudioText()
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    font.bold: true
+                                    color: propertyPanelMode === "audio" ? Theme.highlightColor : Theme.primaryColor
+                                    truncationMode: TruncationMode.Fade
                                 }
                             }
                         }
 
                         BackgroundItem {
-                            id: subtitleField
                             width: (parent.width - parent.spacing) / 2
                             height: Theme.itemSizeSmall
                             onClicked: togglePropertyPanel("subtitles")
-
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: Theme.paddingSmall
-                                color: propertyPanelMode === "subtitles" ?
-                                           Theme.rgba(Theme.highlightColor, 0.20) :
-                                           Theme.rgba(Theme.primaryColor, 0.08)
-                                border.width: 1
-                                border.color: propertyPanelMode === "subtitles" ?
-                                                  Theme.highlightColor : Theme.secondaryColor
-                            }
-
                             Row {
-                                anchors.fill: parent
-                                anchors.leftMargin: Theme.paddingSmall
-                                anchors.rightMargin: Theme.paddingSmall
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width
                                 spacing: Theme.paddingSmall
-
-                                Rectangle {
-                                    width: Theme.iconSizeSmall * 1.25
-                                    height: Theme.iconSizeSmall
-                                    radius: Theme.paddingSmall / 2
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    color: "transparent"
-                                    border.width: 2
-                                    border.color: Theme.primaryColor
-
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "CC"
-                                        font.bold: true
-                                        font.pixelSize: Theme.fontSizeExtraSmall
-                                    }
+                                Label {
+                                    text: qsTr("Subs:")
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    color: Theme.secondaryColor
                                 }
-
-                                Column {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: parent.width - Theme.iconSizeSmall * 1.25 - parent.spacing
-                                    spacing: 0
-                                    Label {
-                                        width: parent.width
-                                        text: qsTr("Subtitles")
-                                        font.pixelSize: Theme.fontSizeExtraSmall
-                                        color: Theme.secondaryColor
-                                    }
-                                    Label {
-                                        width: parent.width
-                                        text: activeSubtitleText()
-                                        font.pixelSize: Theme.fontSizeSmall
-                                        font.bold: true
-                                        truncationMode: TruncationMode.Fade
-                                    }
+                                Label {
+                                    width: parent.width - x
+                                    text: activeSubtitleText()
+                                    font.pixelSize: Theme.fontSizeSmall
+                                    font.bold: true
+                                    color: propertyPanelMode === "subtitles" ? Theme.highlightColor : Theme.primaryColor
+                                    truncationMode: TruncationMode.Fade
                                 }
                             }
                         }
@@ -442,7 +447,6 @@ Page {
                                 if (appClient && appClient.volumePlugin)
                                     appClient.volumePlugin.muted = !appClient.volumePlugin.muted
                             }
-
                             Label {
                                 anchors.centerIn: parent
                                 text: appClient && appClient.volumePlugin && appClient.volumePlugin.muted ? "🔇" : "🔊"
@@ -483,40 +487,58 @@ Page {
                 width: parent.width - 2 * Theme.horizontalPageMargin
                 anchors.horizontalCenter: parent.horizontalCenter
                 visible: player === null
-                text: qsTr("Nothing playing")
+                text: appClient && appClient.connectionStatus === 2 ?
+                          qsTr("Nothing playing") : qsTr("Connecting to Kodi…")
                 color: Theme.secondaryColor
                 horizontalAlignment: Text.AlignHCenter
-            }
-
-            Item {
-                width: 1
-                height: Theme.paddingSmall
             }
         }
     }
 
     Connections {
-        target: appClient.playerService
+        target: appClient && appClient.playerService ? appClient.playerService : null
         onActivePlayerChanged: syncActivePlayer()
+    }
+
+    Connections {
+        target: appClient
+        onConnectionStatusChanged: {
+            if (appClient.connectionStatus === 2)
+                startInitialPlayerRefresh()
+        }
+        onInputRequested: {
+            kodiInputTitle = title
+            kodiInputType = type
+            kodiInputValue = value
+            kodiInputField.text = value
+            kodiInputVisible = true
+            kodiInputField.forceActiveFocus()
+        }
+        onInputFinished: {
+            kodiInputVisible = false
+            kodiInputField.focus = false
+        }
     }
 
     onStatusChanged: {
         if (status === PageStatus.Activating) {
             startInitialPlayerRefresh()
-            if (appClient.volumePlugin)
+            if (appClient && appClient.volumePlugin)
                 appClient.volumePlugin.refreshVolume()
         }
     }
 
     Component.onCompleted: {
+        createInfoComponents()
         startInitialPlayerRefresh()
-        if (appClient.volumePlugin)
+        if (appClient && appClient.volumePlugin)
             appClient.volumePlugin.refreshVolume()
     }
 
+    // Power actions.
     Rectangle {
         id: powerMenu
-        z: 100
+        z: 220
         visible: powerMenuVisible
         anchors.top: parent.top
         anchors.topMargin: Theme.itemSizeMedium
@@ -546,10 +568,9 @@ Page {
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
                     anchors.leftMargin: Theme.paddingMedium
-                    text: qsTr("⏻  Shutdown")
+                    text: qsTr("Shutdown")
                 }
             }
-
             BackgroundItem {
                 width: parent.width
                 height: Theme.itemSizeMedium
@@ -563,10 +584,9 @@ Page {
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
                     anchors.leftMargin: Theme.paddingMedium
-                    text: qsTr("↻  Restart")
+                    text: qsTr("Restart")
                 }
             }
-
             BackgroundItem {
                 width: parent.width
                 height: Theme.itemSizeMedium
@@ -580,10 +600,9 @@ Page {
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
                     anchors.leftMargin: Theme.paddingMedium
-                    text: qsTr("Ⅱ  Suspend")
+                    text: qsTr("Suspend")
                 }
             }
-
             BackgroundItem {
                 width: parent.width
                 height: Theme.itemSizeMedium
@@ -597,23 +616,166 @@ Page {
                     anchors.verticalCenter: parent.verticalCenter
                     anchors.left: parent.left
                     anchors.leftMargin: Theme.paddingMedium
-                    text: qsTr("◐  Hibernate")
+                    text: qsTr("Hibernate")
                 }
             }
         }
     }
 
-    // Compact Kore-inspired 3x3 pad:
-    // Home | Up   | Info
-    // Left | OK   | Right
-    // Back | Down | Menu
+    // Main hamburger drawer: this replaces the old directory landing page.
+    Item {
+        id: drawerLayer
+        z: 300
+        anchors.fill: parent
+        visible: drawerVisible
+
+        Rectangle {
+            anchors.fill: parent
+            color: "#80000000"
+            MouseArea {
+                anchors.fill: parent
+                onClicked: drawerVisible = false
+            }
+        }
+
+        Rectangle {
+            width: page.width * 0.76
+            height: parent.height
+            anchors.left: parent.left
+            color: Theme.rgba(Theme.highlightBackgroundColor, 0.99)
+
+            Column {
+                width: parent.width
+                anchors.top: parent.top
+                anchors.topMargin: Theme.paddingLarge
+
+                Label {
+                    text: appClient && appClient.server ? appClient.server.name : qsTr("Kontroller")
+                    font.pixelSize: Theme.fontSizeLarge
+                    font.bold: true
+                    leftPadding: Theme.horizontalPageMargin
+                    height: Theme.itemSizeMedium
+                    verticalAlignment: Text.AlignVCenter
+                }
+
+                Repeater {
+                    model: [
+                        {"label": qsTr("Remote"), "target": "remote"},
+                        {"label": qsTr("Music"), "target": "music"},
+                        {"label": qsTr("Videos"), "target": "videos"},
+                        {"label": qsTr("Images"), "target": "images"},
+                        {"label": qsTr("Playlist"), "target": "playlist"},
+                        {"label": qsTr("Server management"), "target": "server"},
+                        {"label": qsTr("Settings"), "target": "settings"}
+                    ]
+                    delegate: BackgroundItem {
+                        width: parent.width
+                        height: Theme.itemSizeMedium
+                        onClicked: {
+                            if (modelData.target === "remote")
+                                closeDrawer()
+                            else
+                                pushRelevantPage(modelData.target)
+                        }
+                        Label {
+                            anchors.left: parent.left
+                            anchors.leftMargin: Theme.horizontalPageMargin
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: modelData.label
+                            color: modelData.target === "remote" ? Theme.highlightColor : Theme.primaryColor
+                        }
+                    }
+                }
+
+                BackgroundItem {
+                    width: parent.width
+                    height: Theme.itemSizeMedium
+                    visible: appSettings.servers.length > 1
+                    onClicked: pushRelevantPage("switch")
+                    Label {
+                        anchors.left: parent.left
+                        anchors.leftMargin: Theme.horizontalPageMargin
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: qsTr("Switch server")
+                    }
+                }
+            }
+        }
+    }
+
+    // Kodi asks for text via Input.OnInputRequested when search/path dialogs are active.
+    Rectangle {
+        id: kodiInputPanel
+        z: 400
+        visible: kodiInputVisible
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: Theme.paddingMedium
+        anchors.rightMargin: Theme.paddingMedium
+        anchors.bottomMargin: Theme.paddingMedium
+        height: inputColumn.height + 2 * Theme.paddingMedium
+        radius: Theme.paddingMedium
+        color: Theme.rgba(Theme.highlightBackgroundColor, 0.99)
+        border.width: 1
+        border.color: Theme.highlightColor
+
+        Column {
+            id: inputColumn
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.topMargin: Theme.paddingMedium
+            anchors.leftMargin: Theme.paddingMedium
+            anchors.rightMargin: Theme.paddingMedium
+            spacing: Theme.paddingSmall
+
+            Label {
+                width: parent.width
+                text: kodiInputTitle.length > 0 ? kodiInputTitle : qsTr("Kodi input")
+                font.pixelSize: Theme.fontSizeMedium
+                font.bold: true
+                wrapMode: Text.Wrap
+            }
+
+            TextField {
+                id: kodiInputField
+                width: parent.width
+                text: kodiInputValue
+                placeholderText: qsTr("Enter text for Kodi")
+                inputMethodHints: kodiInputType === "password" ? Qt.ImhHiddenText : Qt.ImhNone
+            }
+
+            Row {
+                anchors.right: parent.right
+                spacing: Theme.paddingMedium
+                Button {
+                    text: qsTr("Cancel")
+                    onClicked: {
+                        kodiInputVisible = false
+                        kodiInputField.focus = false
+                    }
+                }
+                Button {
+                    text: qsTr("Send")
+                    onClicked: {
+                        remoteController.sendText(kodiInputField.text, true)
+                        kodiInputVisible = false
+                        kodiInputField.focus = false
+                    }
+                }
+            }
+        }
+    }
+
+    // Compact D-pad, about one centimetre higher than build 20.
     Item {
         id: dpad
         width: padCell * 3
         height: padCell * 3
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: Theme.paddingMedium
+        anchors.bottomMargin: Theme.itemSizeSmall + Theme.paddingLarge
 
         IconButton {
             id: homeButton
@@ -622,32 +784,28 @@ Page {
             width: padCell
             height: padCell
             icon.source: "image://theme/icon-m-home"
-            onClicked: {
-                remoteController.home()
-                feedback()
-            }
+            onClicked: remoteController.home()
         }
 
-        BackgroundItem {
+        Item {
             id: upButton
             x: padCell
             y: 0
             width: padCell
             height: padCell
-            onClicked: remoteController.up()
-
             Rectangle {
                 anchors.fill: parent
                 radius: Theme.paddingSmall
-                color: upButton.highlighted ?
-                           Theme.rgba(Theme.highlightColor, 0.28) :
-                           Theme.rgba(Theme.primaryColor, 0.12)
+                color: upTouch.pressed ? Theme.rgba(Theme.highlightColor, 0.28)
+                                       : Theme.rgba(Theme.primaryColor, 0.12)
             }
-            Label {
-                anchors.centerIn: parent
-                text: "▲"
-                font.pixelSize: Theme.fontSizeHuge
-                color: upButton.highlighted ? Theme.highlightColor : Theme.primaryColor
+            Label { anchors.centerIn: parent; text: "▲"; font.pixelSize: Theme.fontSizeHuge }
+            MouseArea {
+                id: upTouch
+                anchors.fill: parent
+                onPressed: startDirection("up")
+                onReleased: stopDirection()
+                onCanceled: stopDirection()
             }
         }
 
@@ -658,83 +816,78 @@ Page {
             width: padCell
             height: padCell
             icon.source: "image://theme/icon-m-question"
-            onClicked: {
-                remoteController.info()
-                feedback()
-            }
+            onClicked: remoteController.info()
         }
 
-        BackgroundItem {
+        Item {
             id: leftButton
             x: 0
             y: padCell
             width: padCell
             height: padCell
-            onClicked: remoteController.left()
-
             Rectangle {
                 anchors.fill: parent
                 radius: Theme.paddingSmall
-                color: leftButton.highlighted ?
-                           Theme.rgba(Theme.highlightColor, 0.28) :
-                           Theme.rgba(Theme.primaryColor, 0.12)
+                color: leftTouch.pressed ? Theme.rgba(Theme.highlightColor, 0.28)
+                                         : Theme.rgba(Theme.primaryColor, 0.12)
             }
-            Label {
-                anchors.centerIn: parent
-                text: "◀"
-                font.pixelSize: Theme.fontSizeHuge
-                color: leftButton.highlighted ? Theme.highlightColor : Theme.primaryColor
+            Label { anchors.centerIn: parent; text: "◀"; font.pixelSize: Theme.fontSizeHuge }
+            MouseArea {
+                id: leftTouch
+                anchors.fill: parent
+                onPressed: startDirection("left")
+                onReleased: stopDirection()
+                onCanceled: stopDirection()
             }
         }
 
-        BackgroundItem {
+        Item {
             id: selectButton
             x: padCell
             y: padCell
             width: padCell
             height: padCell
-            onClicked: remoteController.select()
-
             Rectangle {
                 width: Math.min(parent.width, parent.height) * 0.78
                 height: width
                 radius: width / 2
                 anchors.centerIn: parent
-                color: selectButton.highlighted ?
-                           Theme.rgba(Theme.highlightColor, 0.28) :
-                           Theme.rgba(Theme.primaryColor, 0.12)
+                color: selectTouch.pressed ? Theme.rgba(Theme.highlightColor, 0.28)
+                                           : Theme.rgba(Theme.primaryColor, 0.12)
                 border.width: Math.max(2, Theme.paddingSmall / 3)
-                border.color: selectButton.highlighted ? Theme.highlightColor : Theme.primaryColor
-
+                border.color: selectTouch.pressed ? Theme.highlightColor : Theme.primaryColor
                 Label {
                     anchors.centerIn: parent
                     text: "OK"
                     font.pixelSize: Theme.fontSizeMedium
-                    color: selectButton.highlighted ? Theme.highlightColor : Theme.primaryColor
                 }
+            }
+            MouseArea {
+                id: selectTouch
+                anchors.fill: parent
+                onPressed: remoteController.select()
             }
         }
 
-        BackgroundItem {
+        Item {
             id: rightButton
             x: padCell * 2
             y: padCell
             width: padCell
             height: padCell
-            onClicked: remoteController.right()
-
             Rectangle {
                 anchors.fill: parent
                 radius: Theme.paddingSmall
-                color: rightButton.highlighted ?
-                           Theme.rgba(Theme.highlightColor, 0.28) :
-                           Theme.rgba(Theme.primaryColor, 0.12)
+                color: rightTouch.pressed ? Theme.rgba(Theme.highlightColor, 0.28)
+                                          : Theme.rgba(Theme.primaryColor, 0.12)
             }
-            Label {
-                anchors.centerIn: parent
-                text: "▶"
-                font.pixelSize: Theme.fontSizeHuge
-                color: rightButton.highlighted ? Theme.highlightColor : Theme.primaryColor
+            Label { anchors.centerIn: parent; text: "▶"; font.pixelSize: Theme.fontSizeHuge }
+            MouseArea {
+                id: rightTouch
+                anchors.fill: parent
+                onPressed: startDirection("right")
+                onReleased: stopDirection()
+                onCanceled: stopDirection()
             }
         }
 
@@ -745,32 +898,28 @@ Page {
             width: padCell
             height: padCell
             icon.source: "image://theme/icon-m-back"
-            onClicked: {
-                remoteController.back()
-                feedback()
-            }
+            onClicked: remoteController.back()
         }
 
-        BackgroundItem {
+        Item {
             id: downButton
             x: padCell
             y: padCell * 2
             width: padCell
             height: padCell
-            onClicked: remoteController.down()
-
             Rectangle {
                 anchors.fill: parent
                 radius: Theme.paddingSmall
-                color: downButton.highlighted ?
-                           Theme.rgba(Theme.highlightColor, 0.28) :
-                           Theme.rgba(Theme.primaryColor, 0.12)
+                color: downTouch.pressed ? Theme.rgba(Theme.highlightColor, 0.28)
+                                         : Theme.rgba(Theme.primaryColor, 0.12)
             }
-            Label {
-                anchors.centerIn: parent
-                text: "▼"
-                font.pixelSize: Theme.fontSizeHuge
-                color: downButton.highlighted ? Theme.highlightColor : Theme.primaryColor
+            Label { anchors.centerIn: parent; text: "▼"; font.pixelSize: Theme.fontSizeHuge }
+            MouseArea {
+                id: downTouch
+                anchors.fill: parent
+                onPressed: startDirection("down")
+                onReleased: stopDirection()
+                onCanceled: stopDirection()
             }
         }
 
@@ -781,10 +930,7 @@ Page {
             width: padCell
             height: padCell
             icon.source: "image://theme/icon-m-menu"
-            onClicked: {
-                remoteController.contextMenu()
-                feedback()
-            }
+            onClicked: remoteController.contextMenu()
         }
     }
 }

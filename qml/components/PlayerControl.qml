@@ -2,14 +2,11 @@ import QtQuick 2.0
 import Sailfish.Silica 1.0
 import "../utils.js" as Utils
 
-
 Item {
-
     property bool showSlider: true
     property bool showLabel: true
-    property var player : null
-    implicitHeight: row.y + row.height
-
+    property var player: null
+    implicitHeight: controlsRow.y + controlsRow.height
 
     Slider {
         id: progressSlider
@@ -21,12 +18,9 @@ Item {
         animateValue: false
         value: player ? player.time : 0
         onDownChanged: {
-            if(!down && player && player.canSeek) {
+            if (!down && player && player.canSeek) {
                 var target = Math.round(sliderValue)
                 player.seekToTime(target)
-
-                // Dragging a Silica Slider breaks its value binding. Restore it
-                // after sending the seek so later Kodi time updates keep moving it.
                 value = Qt.binding(function() { return player ? player.time : 0 })
             }
         }
@@ -35,142 +29,138 @@ Item {
     }
 
     Label {
+        id: lblCurrentTime
         anchors.left: parent.left
         anchors.leftMargin: Theme.paddingMedium
         anchors.verticalCenter: progressSlider.verticalCenter
         text: getTime(player)
         font.pixelSize: Theme.fontSizeExtraSmall
-        id:lblCurrentTime
-        color:Theme.highlightColor
+        color: Theme.highlightColor
     }
+
     Label {
+        id: lblTotalTime
         anchors.right: parent.right
         anchors.rightMargin: Theme.paddingMedium
         anchors.verticalCenter: progressSlider.verticalCenter
         text: getTotalTime(player)
         font.pixelSize: Theme.fontSizeExtraSmall
-        id:lblTotalTime
-        color:Theme.highlightColor
+        color: Theme.highlightColor
     }
 
     Label {
+        id: lblDesc
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.leftMargin: Theme.paddingSmall
         anchors.rightMargin: Theme.paddingSmall
-        anchors.bottom:progressSlider.bottom
+        anchors.bottom: progressSlider.bottom
         font.pixelSize: Theme.fontSizeExtraSmall
         horizontalAlignment: Text.AlignHCenter
-        text: player?getCurrentDisplay(player.playingInformation.currentItem):""
+        text: player ? getCurrentDisplay(player.playingInformation.currentItem) : ""
         elide: Text.ElideMiddle
-        clip:true
-        color:Theme.highlightColor
+        clip: true
+        color: Theme.highlightColor
         visible: showLabel
-        id: lblDesc
     }
 
+    // Larger transport controls with more breathing room below the seek bar.
     Row {
+        id: controlsRow
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.top: lblDesc.visible?lblDesc.bottom:lblCurrentTime.bottom;
-        height:Theme.iconSizeMedium + Theme.paddingMedium
-        spacing: Theme.paddingLarge
-        id:row
-        Repeater {
-            model: [
-                {"icon":"image://theme/icon-m-previous", "action":"prev"},
-    //            {"icon":"image://theme/icon-m-left", "action":"backward"},
-                {"icon":"image://assets/icons/icon-m-stop", "action":"stop"},
-                {"icon":["image://theme/icon-m-play", "image://theme/icon-m-pause"], "action":"playpause"},
-    //            {"icon":"image://theme/icon-m-right", "action":"forward"},
-                {"icon":"image://theme/icon-m-next", "action":"next"}
-            ]
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.topMargin: Theme.paddingMedium
-            height:Theme.iconSizeMedium
-            delegate: IconButton {
-                width:Theme.iconSizeMedium
-                height:Theme.iconSizeMedium
-                icon.source: {
-                    if(typeof(model.modelData.icon) === "string")
-                        return model.modelData.icon;
-                    else
-                    {
-                        if(player && player.speed > 0)
-                            return model.modelData.icon[1];
-                        else
-                            return model.modelData.icon[0];
-                    }
-                }
-                onClicked: executeCommand(model.modelData.action);
+        anchors.top: progressSlider.bottom
+        anchors.topMargin: Theme.paddingMedium
+        spacing: Theme.paddingSmall
+        height: Theme.itemSizeSmall
+
+        IconButton {
+            width: Theme.itemSizeSmall
+            height: Theme.itemSizeSmall
+            icon.source: "image://theme/icon-m-previous"
+            onClicked: executeCommand("prev")
+        }
+
+        BackgroundItem {
+            width: Theme.itemSizeSmall
+            height: Theme.itemSizeSmall
+            onClicked: executeCommand("backward")
+            Label {
+                anchors.centerIn: parent
+                text: "«"
+                font.pixelSize: Theme.fontSizeHuge
+                color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
             }
         }
-    }
 
-
-    function getTime(player)
-    {
-        if(player)
-            return Utils.formatMsecTime(player.time);
-        return "-";
-    }
-
-    function getTotalTime(player)
-    {
-        if(player)
-        {
-            if(player.type === "picture")
-                return "";
-            else
-                return Utils.formatMsecTime(player.totalTime);
+        IconButton {
+            width: Theme.itemSizeSmall
+            height: Theme.itemSizeSmall
+            icon.source: player && player.speed > 0 ?
+                         "image://theme/icon-m-pause" : "image://theme/icon-m-play"
+            onClicked: executeCommand("playpause")
         }
-        return "-";
+
+        IconButton {
+            width: Theme.itemSizeSmall
+            height: Theme.itemSizeSmall
+            icon.source: "image://assets/icons/icon-m-stop"
+            onClicked: executeCommand("stop")
+        }
+
+        BackgroundItem {
+            width: Theme.itemSizeSmall
+            height: Theme.itemSizeSmall
+            onClicked: executeCommand("forward")
+            Label {
+                anchors.centerIn: parent
+                text: "»"
+                font.pixelSize: Theme.fontSizeHuge
+                color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
+            }
+        }
+
+        IconButton {
+            width: Theme.itemSizeSmall
+            height: Theme.itemSizeSmall
+            icon.source: "image://theme/icon-m-next"
+            onClicked: executeCommand("next")
+        }
     }
 
-    function executeCommand(command)
-    {
-        if(player === null)
-            return;
-        if(command === "stop")
-            player.stop();
-        if(command === "prev")
-            player.previous();
-        if(command === "playpause")
-            player.playPause();
-        if(command === "next")
-            player.next();
-        if(command === "backward")
-            player.seekBackward();
-        if(command === "forward")
-            player.seekForward();
+    function getTime(p) {
+        return p ? Utils.formatMsecTime(p.time) : "-"
     }
 
-    function getCurrentDisplay(item)
-    {
-        if(!item)
+    function getTotalTime(p) {
+        if (!p)
+            return "-"
+        return p.type === "picture" ? "" : Utils.formatMsecTime(p.totalTime)
+    }
+
+    function executeCommand(command) {
+        if (player === null)
+            return
+        if (command === "stop")
+            player.stop()
+        else if (command === "prev")
+            player.previous()
+        else if (command === "playpause")
+            player.playPause()
+        else if (command === "next")
+            player.next()
+        else if (command === "backward")
+            player.seekBackward()
+        else if (command === "forward")
+            player.seekForward()
+    }
+
+    function getCurrentDisplay(item) {
+        if (!item)
             return ""
-        else if(item.type === "song")
+        if (item.type === "song")
             return qsTr("<i>%1</i> by <i>%2</i>").arg(item.label).arg(item.artist)
-        else if(item.type === "unknown")
+        if (item.type === "unknown" || item.type === "movie" || item.type === "picture")
             return qsTr("<i>%1</i>").arg(item.label)
-        else if(item.type === "movie")
-            return qsTr("<i>%1</i>").arg(item.label)
-        else if(item.type === "picture")
-            return qsTr("<i>%1</i>").arg(item.label)
-        else
-            return item.type;
+        return item.type
     }
-
-    function getNextDisplay(item)
-    {
-        if(!item)
-            return ""
-        else if(item.type === "song")
-            return qsTr("Next: <i>%1</i> by <i>%2</i>").arg(item.label).arg(item.artist)
-        else if(item.type === "unknown")
-            return qsTr("Next: <i>%1</i>").arg(item.label)
-        else
-            return item.type;
-    }
-
 }
