@@ -2,6 +2,8 @@ import QtQuick 2.6
 import Sailfish.Silica 1.0
 import harbour.eu.tgcm 1.0
 import Nemo.Notifications 1.0
+import org.nemomobile.policy 1.0
+import Sailfish.Media 1.0
 import "./components"
 
 ApplicationWindow {
@@ -9,6 +11,39 @@ ApplicationWindow {
     _defaultPageOrientations: Orientation.All
     cover: Qt.resolvedUrl("cover/CoverPage.qml")
     id: appWindow
+
+    // Hardware volume buttons must live at application level because RemoteControl
+    // is now the root page and KontrollerMain is no longer instantiated.
+    Remote {
+        id: hardwareVolumeRemote
+        client: appClient
+    }
+
+    MediaKey {
+        enabled: Qt.application.active
+        key: Qt.Key_VolumeUp
+        onPressed: hardwareVolumeRemote.volumeUp()
+        onRepeat: hardwareVolumeRemote.volumeUp()
+    }
+
+    MediaKey {
+        enabled: Qt.application.active
+        key: Qt.Key_VolumeDown
+        onPressed: hardwareVolumeRemote.volumeDown()
+        onRepeat: hardwareVolumeRemote.volumeDown()
+    }
+
+    Permissions {
+        enabled: Qt.application.active
+        autoRelease: true
+        applicationClass: "camera"
+
+        Resource {
+            id: volumeKeysResource
+            type: Resource.ScaleButton
+            optional: true
+        }
+    }
 
     // Remote is now the real root page, not a page pushed after the menu.
     initialPage: Component {
