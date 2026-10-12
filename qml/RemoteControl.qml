@@ -756,9 +756,8 @@ Page {
                     text: kodiInputValue
                     placeholderText: qsTr("Enter text for Kodi")
                     color: Theme.primaryColor
-                    placeholderColor: Theme.secondaryColor
                     selectionColor: Theme.highlightColor
-                    selectedTextColor: Theme.highlightFromColor(Theme.highlightColor, Theme.primaryColor)
+                    selectedTextColor: Theme.primaryColor
                     inputMethodHints: kodiInputType === "password" ? Qt.ImhHiddenText : Qt.ImhNone
                 }
             }
