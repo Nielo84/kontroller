@@ -460,7 +460,10 @@ void Player::handleSetAudioStreamResult_(QJsonRpcServiceReply* reply, int index)
 	if (reply->response().result().isString())
 	{
 		if (reply->response().result().toString() == "OK")
+		{
 			setCurrentAudioStreamIndex_(index);
+			refreshPlayerStatus();
+		}
 	}
 }
 
@@ -471,6 +474,7 @@ void Player::handleSetSubtitleResult_(QJsonRpcServiceReply* reply, int index)
 		if (reply->response().result().toString() == "OK")
 		{
 			setCurrentSubtitleIndex_(index);
+			refreshPlayerStatus();
 		}
 	}
 }
@@ -664,20 +668,16 @@ void Player::handlePlayerStatus_()
 								s->setName(language);
 							subtitles_.push_back(s);
 						}
-						auto currentSub = obj.value("currentsubtitle").toObject();
-						auto enabled = obj.value("subtitleenabled").toBool();
 						emit subtitlesChanged();
-						if (enabled)
-						{
-							if (!currentSub.isEmpty())
-							{
-								auto index = currentSub.value("index");
-								setCurrentSubtitleIndex_(index.toInt());
-							}
-						}
-						else
-							setCurrentSubtitleIndex_(-1);
 					}
+				}
+				{
+					auto currentSub = obj.value("currentsubtitle").toObject();
+					auto enabled = obj.value("subtitleenabled").toBool();
+					if (enabled && !currentSub.isEmpty())
+						setCurrentSubtitleIndex_(currentSub.value("index").toInt());
+					else
+						setCurrentSubtitleIndex_(-1);
 				}
 				auto audiostreams = obj.value("audiostreams").toArray();
 				if(!sameAudio_(audioStreams_, audiostreams))
@@ -700,16 +700,20 @@ void Player::handlePlayerStatus_()
 								s->setName(language);
 							audioStreams_.push_back(s);
 						}
-						auto currentStream = obj.value("currentaudiostream");
-						auto index = currentStream.toObject().value("index").toInt();
 						emit audioStreamsChanged();
-						setCurrentAudioStreamIndex_(index);
 					}
 					else
 					{
 						emit audioStreamsChanged();
 						setCurrentAudioStreamIndex_(-1);
 					}
+				}
+				{
+					auto currentStream = obj.value("currentaudiostream").toObject();
+					if (!currentStream.isEmpty())
+						setCurrentAudioStreamIndex_(currentStream.value("index").toInt());
+					else if (audiostreams.isEmpty())
+						setCurrentAudioStreamIndex_(-1);
 				}
 				// setBoolValue(obj.value("canzoom"), *player, &Player::setCanZoom);
 				// setBoolValue(obj.value("canrotate"), *player, &Player::setCanRotate);
@@ -1016,6 +1020,9 @@ void Player::setRepeat(int repeat)
 
 void Player::setCurrentSubtitleIndex(int index)
 {
+	// Show the user's choice immediately; Kodi confirms it via the reply/status refresh.
+	setCurrentSubtitleIndex_(index);
+
 	QJsonObject parameters;
 	parameters.insert("playerid", playerId_);
 	if (index == -1)
@@ -1037,6 +1044,9 @@ void Player::setCurrentSubtitleIndex(int index)
 
 void Player::setCurrentAudioStreamIndex(int index)
 {
+	// Show the user's choice immediately; Kodi confirms it via the reply/status refresh.
+	setCurrentAudioStreamIndex_(index);
+
 	QJsonObject parameters;
 	parameters.insert("playerid", playerId_);
 	parameters.insert("stream", index);

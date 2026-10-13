@@ -17,7 +17,18 @@ Item {
         if (!value)
             return ""
         var v = ("" + value).trim().toUpperCase()
-        return v.substring(0, Math.min(3, v.length))
+        var base = v.split("-")[0].split("_")[0]
+        if (base === "EN") return "ENG"
+        if (base === "NL" || base === "DUT") return "NLD"
+        if (base === "DE" || base === "GER") return "DEU"
+        if (base === "FR" || base === "FRE") return "FRA"
+        if (base === "ES") return "SPA"
+        if (base === "IT") return "ITA"
+        if (base === "PT") return "POR"
+        if (base === "JA") return "JPN"
+        if (base === "KO") return "KOR"
+        if (base === "ZH" || base === "CHI") return "ZHO"
+        return base.substring(0, Math.min(3, base.length))
     }
 
     function languageName(value) {
@@ -66,7 +77,7 @@ Item {
                     height: Theme.itemSizeSmall
                     onClicked: {
                         if (player)
-                            player.currentAudioStream = model.modelData.index
+                            player.currentAudioStreamIndex = model.modelData.index
                     }
                     Label {
                         anchors.left: parent.left
@@ -129,50 +140,8 @@ Item {
             }
         }
 
-        // Keep the legacy controls available from the overflow menu and old CurrentlyPlaying page.
-        ComboBox {
-            id: cbxSubs
-            visible: mode === "all" && player && player.type === "video"
-            label: qsTr("Subtitles")
-            clip: true
-            menu: ContextMenu {
-                Repeater {
-                    id: subsRptr
-                    model: player ? player.subtitles : []
-                    delegate: MenuItem {
-                        text: model.modelData.index < 0 ?
-                                  qsTr("OFF · No subtitles") :
-                                  streamLabel(model.language, model.name)
-                        onClicked: if (player) player.currentSubtitleIndex = model.modelData.index
-                    }
-                }
-                MenuItem {
-                    text: qsTr("Download subtitles…")
-                    onClicked: remoteController.downloadSubtitles()
-                }
-            }
-            currentIndex: -1
-            value: player && player.subtitles.length === 0 ? qsTr("No subtitles available") : ""
-        }
-
-        ComboBox {
-            id: cbxStreams
-            visible: mode === "all" && player && player.type === "video"
-            label: qsTr("Audio")
-            clip: true
-            menu: ContextMenu {
-                Repeater {
-                    id: streamsRptr
-                    model: player ? player.audioStreams : []
-                    delegate: MenuItem {
-                        text: streamLabel(model.language, model.name)
-                        onClicked: if (player) player.currentAudioStream = model.modelData.index
-                    }
-                }
-            }
-            value: ""
-        }
-
+        // Audio and subtitles are handled only by the dedicated Remote controls.
+        // The overflow/submenu intentionally keeps only repeat and shuffle.
         Row {
             visible: mode === "all"
             width: parent.width
@@ -204,46 +173,8 @@ Item {
     }
 
     function connectPlayerEvents() {
-        player.onCurrentSubtitleIndexChanged.connect(setSubsIndex)
-        player.onCurrentAudioStreamIndexChanged.connect(setAudioIndex)
         player.onShuffledChanged.connect(setPlayerShuffled)
         player.onRepeatChanged.connect(setPlayerRepeat)
-    }
-
-    function getCurrentSubsIndex() {
-        if (player) {
-            var idx = player.currentSubtitleIndex
-            for (var i = 0; i < player.subtitles.length; ++i)
-                if (player.subtitles[i].index === idx)
-                    return i
-        }
-        return -1
-    }
-
-    function setSubsIndex() {
-        var idx = getCurrentSubsIndex()
-        if (idx !== -1 && mode === "all") {
-            cbxSubs.currentIndex = idx
-            cbxSubs.value = player.subtitles[idx].name
-        }
-    }
-
-    function getCurrentAudioIndex() {
-        if (player) {
-            var idx = player.currentAudioStreamIndex
-            for (var i = 0; i < player.audioStreams.length; ++i)
-                if (player.audioStreams[i].index === idx)
-                    return i
-        }
-        return -1
-    }
-
-    function setAudioIndex() {
-        var i = getCurrentAudioIndex()
-        if (i !== -1 && mode === "all") {
-            cbxStreams.currentIndex = i
-            cbxStreams.value = streamLabel(player.audioStreams[i].language, player.audioStreams[i].name)
-        }
     }
 
     function setPlayerShuffled() {
@@ -268,8 +199,6 @@ Item {
     }
 
     function updatePlayerProperties() {
-        setSubsIndex()
-        setAudioIndex()
         setPlayerShuffled()
         setPlayerRepeat()
     }
