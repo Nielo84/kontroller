@@ -92,10 +92,52 @@ Page {
     function languageCode(value) {
         if (!value)
             return ""
-        var clean = ("" + value).trim()
-        if (clean.length === 0)
-            return ""
-        return clean.substring(0, Math.min(3, clean.length)).toUpperCase()
+        var v = ("" + value).trim().toUpperCase()
+        var base = v.split("-")[0].split("_")[0]
+        if (base === "EN") return "ENG"
+        if (base === "NL" || base === "DUT") return "NLD"
+        if (base === "DE" || base === "GER") return "DEU"
+        if (base === "FR" || base === "FRE") return "FRA"
+        if (base === "ES") return "SPA"
+        if (base === "IT") return "ITA"
+        if (base === "PT") return "POR"
+        if (base === "JA") return "JPN"
+        if (base === "KO") return "KOR"
+        if (base === "ZH" || base === "CHI") return "ZHO"
+        return base.substring(0, Math.min(3, base.length))
+    }
+
+    function audioDetail(name) {
+        var n = name ? ("" + name).toUpperCase() : ""
+        var codec = ""
+        if (n.indexOf("TRUEHD") >= 0) codec = "TRUEHD"
+        else if (n.indexOf("DTS-HD") >= 0 || n.indexOf("DTS HD") >= 0) codec = "DTS-HD"
+        else if (n.indexOf("DTS") >= 0) codec = "DTS"
+        else if (n.indexOf("E-AC-3") >= 0 || n.indexOf("EAC3") >= 0 || n.indexOf("DD+") >= 0) codec = "EAC3"
+        else if (n.indexOf("AC3") >= 0 || n.indexOf("AC-3") >= 0) codec = "AC3"
+        else if (n.indexOf("AAC") >= 0) codec = "AAC"
+        else if (n.indexOf("FLAC") >= 0) codec = "FLAC"
+        else if (n.indexOf("OPUS") >= 0) codec = "OPUS"
+        else if (n.indexOf("MP3") >= 0) codec = "MP3"
+        else if (n.indexOf("PCM") >= 0) codec = "PCM"
+
+        var channels = ""
+        if (n.indexOf("7.1") >= 0) channels = "7.1"
+        else if (n.indexOf("5.1") >= 0) channels = "5.1"
+        else if (n.indexOf("2.0") >= 0 || n.indexOf("STEREO") >= 0) channels = "2.0"
+        else if (n.indexOf("MONO") >= 0) channels = "1.0"
+
+        if (codec.length && channels.length)
+            return codec + " " + channels
+        return codec.length ? codec : channels
+    }
+
+    function subtitleDetail(name) {
+        var n = name ? ("" + name).toUpperCase() : ""
+        if (n.indexOf("FORCED") >= 0) return "FORCED"
+        if (n.indexOf("SDH") >= 0) return "SDH"
+        if (n.indexOf("CLOSED CAPTION") >= 0 || n.indexOf(" CC") >= 0) return "CC"
+        return ""
     }
 
     function activeAudioText() {
@@ -105,13 +147,14 @@ Page {
             var stream = player.audioStreams[i]
             if (stream && stream.index === player.currentAudioStreamIndex) {
                 var lang = languageCode(stream.language)
-                var name = stream.name ? ("" + stream.name).trim() : ""
-                if (lang.length > 0 && name.length > 0 && name.toUpperCase() !== lang)
-                    return lang + " · " + name
-                if (lang.length > 0)
+                var detail = audioDetail(stream.name)
+                if (lang.length && detail.length)
+                    return lang + " · " + detail
+                if (lang.length)
                     return lang
-                if (name.length > 0)
-                    return name
+                if (detail.length)
+                    return detail
+                return qsTr("Unknown")
             }
         }
         return qsTr("Unknown")
@@ -126,13 +169,14 @@ Page {
             var sub = player.subtitles[i]
             if (sub && sub.index === player.currentSubtitleIndex) {
                 var lang = languageCode(sub.language)
-                var name = sub.name ? ("" + sub.name).trim() : ""
-                if (lang.length > 0 && name.length > 0 && name.toUpperCase() !== lang)
-                    return lang + " · " + name
-                if (lang.length > 0)
+                var detail = subtitleDetail(sub.name)
+                if (lang.length && detail.length)
+                    return lang + " · " + detail
+                if (lang.length)
                     return lang
-                if (name.length > 0)
-                    return name
+                if (detail.length)
+                    return detail
+                return qsTr("Unknown")
             }
         }
         return qsTr("Unknown")
@@ -431,6 +475,7 @@ Page {
                         player: page.player
                         mode: propertyPanelMode
                         visible: propertyPanelMode !== ""
+                        onSelectionMade: propertyPanelMode = ""
                     }
 
                     Row {

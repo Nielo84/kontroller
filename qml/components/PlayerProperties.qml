@@ -6,6 +6,7 @@ import Sailfish.Silica 1.0
 Item {
     property var player
     property string mode: "all"
+    signal selectionMade()
     implicitHeight: contents.height
 
     Remote {
@@ -31,32 +32,61 @@ Item {
         return base.substring(0, Math.min(3, base.length))
     }
 
-    function languageName(value) {
-        var c = code(value)
-        if (c === "ENG") return qsTr("English")
-        if (c === "NLD" || c === "DUT") return qsTr("Dutch")
-        if (c === "DEU" || c === "GER") return qsTr("German")
-        if (c === "FRA" || c === "FRE") return qsTr("French")
-        if (c === "SPA") return qsTr("Spanish")
-        if (c === "ITA") return qsTr("Italian")
-        if (c === "POR") return qsTr("Portuguese")
-        if (c === "JPN") return qsTr("Japanese")
-        if (c === "KOR") return qsTr("Korean")
-        if (c === "ZHO" || c === "CHI") return qsTr("Chinese")
-        if (c === "UND") return qsTr("Unknown")
+    function audioDetail(name) {
+        var n = name ? ("" + name).toUpperCase() : ""
+        var codec = ""
+        if (n.indexOf("TRUEHD") >= 0) codec = "TRUEHD"
+        else if (n.indexOf("DTS-HD") >= 0 || n.indexOf("DTS HD") >= 0) codec = "DTS-HD"
+        else if (n.indexOf("DTS") >= 0) codec = "DTS"
+        else if (n.indexOf("E-AC-3") >= 0 || n.indexOf("EAC3") >= 0 || n.indexOf("DD+") >= 0) codec = "EAC3"
+        else if (n.indexOf("AC3") >= 0 || n.indexOf("AC-3") >= 0) codec = "AC3"
+        else if (n.indexOf("AAC") >= 0) codec = "AAC"
+        else if (n.indexOf("FLAC") >= 0) codec = "FLAC"
+        else if (n.indexOf("OPUS") >= 0) codec = "OPUS"
+        else if (n.indexOf("MP3") >= 0) codec = "MP3"
+        else if (n.indexOf("PCM") >= 0) codec = "PCM"
+
+        var channels = ""
+        if (n.indexOf("7.1") >= 0) channels = "7.1"
+        else if (n.indexOf("5.1") >= 0) channels = "5.1"
+        else if (n.indexOf("2.0") >= 0 || n.indexOf("STEREO") >= 0) channels = "2.0"
+        else if (n.indexOf("MONO") >= 0) channels = "1.0"
+
+        if (codec.length && channels.length)
+            return codec + " " + channels
+        return codec.length ? codec : channels
+    }
+
+    function subtitleDetail(name) {
+        var n = name ? ("" + name).toUpperCase() : ""
+        if (n.indexOf("FORCED") >= 0) return "FORCED"
+        if (n.indexOf("SDH") >= 0) return "SDH"
+        if (n.indexOf("CLOSED CAPTION") >= 0 || n.indexOf(" CC") >= 0) return "CC"
         return ""
     }
 
-    function streamLabel(language, name) {
-        var c = code(language)
-        var full = languageName(language)
-        var n = name ? ("" + name).trim() : ""
-        var label = c
-        if (full.length > 0)
-            label += (label.length ? " · " : "") + full
-        if (n.length > 0 && n.toUpperCase() !== c && n !== full)
-            label += (label.length ? " — " : "") + n
-        return label.length ? label : qsTr("Unknown")
+    function audioLabel(language, name) {
+        var lang = code(language)
+        var detail = audioDetail(name)
+        if (lang.length && detail.length)
+            return lang + " · " + detail
+        if (lang.length)
+            return lang
+        if (detail.length)
+            return detail
+        return qsTr("Unknown")
+    }
+
+    function subtitleLabel(language, name) {
+        var lang = code(language)
+        var detail = subtitleDetail(name)
+        if (lang.length && detail.length)
+            return lang + " · " + detail
+        if (lang.length)
+            return lang
+        if (detail.length)
+            return detail
+        return qsTr("Unknown")
     }
 
     Column {
@@ -76,8 +106,10 @@ Item {
                     width: contents.width
                     height: Theme.itemSizeSmall
                     onClicked: {
-                        if (player)
+                        if (player) {
                             player.currentAudioStreamIndex = model.modelData.index
+                            selectionMade()
+                        }
                     }
                     Label {
                         anchors.left: parent.left
@@ -85,7 +117,7 @@ Item {
                         anchors.right: parent.right
                         anchors.rightMargin: Theme.paddingMedium
                         anchors.verticalCenter: parent.verticalCenter
-                        text: streamLabel(model.language, model.name)
+                        text: audioLabel(model.language, model.name)
                         font.bold: player && model.modelData.index === player.currentAudioStreamIndex
                         color: player && model.modelData.index === player.currentAudioStreamIndex ?
                                    Theme.highlightColor : Theme.primaryColor
@@ -106,8 +138,10 @@ Item {
                     width: contents.width
                     height: Theme.itemSizeSmall
                     onClicked: {
-                        if (player)
+                        if (player) {
                             player.currentSubtitleIndex = model.modelData.index
+                            selectionMade()
+                        }
                     }
                     Label {
                         anchors.left: parent.left
@@ -117,7 +151,7 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         text: model.modelData.index < 0 ?
                                   qsTr("OFF · No subtitles") :
-                                  streamLabel(model.language, model.name)
+                                  subtitleLabel(model.language, model.name)
                         font.bold: player && model.modelData.index === player.currentSubtitleIndex
                         color: player && model.modelData.index === player.currentSubtitleIndex ?
                                    Theme.highlightColor : Theme.primaryColor

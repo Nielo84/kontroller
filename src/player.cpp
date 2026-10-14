@@ -462,7 +462,9 @@ void Player::handleSetAudioStreamResult_(QJsonRpcServiceReply* reply, int index)
 		if (reply->response().result().toString() == "OK")
 		{
 			setCurrentAudioStreamIndex_(index);
-			refreshPlayerStatus();
+			// Kodi usually switches audio immediately, but a tiny delay prevents
+			// a stale GetProperties reply from momentarily restoring the old track.
+			QTimer::singleShot(250, this, [this]() { refreshPlayerStatus(); });
 		}
 	}
 }
@@ -474,7 +476,9 @@ void Player::handleSetSubtitleResult_(QJsonRpcServiceReply* reply, int index)
 		if (reply->response().result().toString() == "OK")
 		{
 			setCurrentSubtitleIndex_(index);
-			refreshPlayerStatus();
+			// Subtitle activation can lag behind the RPC acknowledgement a little.
+			// Give Kodi time to apply it before reading the authoritative state.
+			QTimer::singleShot(500, this, [this]() { refreshPlayerStatus(); });
 		}
 	}
 }
