@@ -324,28 +324,13 @@ Page {
                         powerMenuVisible = !powerMenuVisible
                     }
 
-                    Item {
+                    Image {
                         anchors.centerIn: parent
                         width: Theme.iconSizeMedium
                         height: Theme.iconSizeMedium
-                        Rectangle {
-                            width: parent.width * 0.72
-                            height: width
-                            radius: width / 2
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            anchors.bottom: parent.bottom
-                            color: "transparent"
-                            border.width: Math.max(2, Theme.paddingSmall / 3)
-                            border.color: powerButton.highlighted ? Theme.highlightColor : Theme.primaryColor
-                        }
-                        Rectangle {
-                            width: Math.max(3, Theme.paddingSmall / 2)
-                            height: parent.height * 0.36
-                            radius: width / 2
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            anchors.top: parent.top
-                            color: powerButton.highlighted ? Theme.highlightColor : Theme.primaryColor
-                        }
+                        source: Qt.resolvedUrl("icons/power.svg")
+                        fillMode: Image.PreserveAspectFit
+                        opacity: powerButton.highlighted ? 0.65 : 1.0
                     }
                 }
             }
@@ -580,7 +565,19 @@ Page {
             appClient.volumePlugin.refreshVolume()
     }
 
-    // Power actions.
+    // Power actions. Tap anywhere outside the popup to dismiss it.
+    Item {
+        id: powerMenuDismissLayer
+        z: 219
+        anchors.fill: parent
+        visible: powerMenuVisible
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: powerMenuVisible = false
+        }
+    }
+
     Rectangle {
         id: powerMenu
         z: 220
@@ -862,22 +859,13 @@ Page {
             height: padCell
             onClicked: remoteController.info()
 
-            Rectangle {
+            Image {
                 anchors.centerIn: parent
-                width: Math.min(parent.width, parent.height) * 0.42
-                height: width
-                radius: width / 2
-                color: "transparent"
-                border.width: Math.max(2, Theme.paddingSmall / 3)
-                border.color: infoButton.highlighted ? Theme.highlightColor : Theme.primaryColor
-
-                Label {
-                    anchors.centerIn: parent
-                    text: "i"
-                    font.pixelSize: Theme.fontSizeMedium
-                    font.bold: true
-                    color: infoButton.highlighted ? Theme.highlightColor : Theme.primaryColor
-                }
+                width: Theme.iconSizeMedium
+                height: Theme.iconSizeMedium
+                source: Qt.resolvedUrl("icons/info-circle.svg")
+                fillMode: Image.PreserveAspectFit
+                opacity: infoButton.highlighted ? 0.65 : 1.0
             }
         }
 
