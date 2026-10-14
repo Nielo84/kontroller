@@ -851,22 +851,14 @@ Page {
             }
         }
 
-        BackgroundItem {
+        IconButton {
             id: infoButton
             x: padCell * 2
             y: 0
             width: padCell
             height: padCell
+            icon.source: "image://theme/icon-m-about"
             onClicked: remoteController.info()
-
-            Image {
-                anchors.centerIn: parent
-                width: Theme.iconSizeMedium
-                height: Theme.iconSizeMedium
-                source: Qt.resolvedUrl("icons/info-circle.svg")
-                fillMode: Image.PreserveAspectFit
-                opacity: infoButton.highlighted ? 0.65 : 1.0
-            }
         }
 
         Item {
