@@ -340,7 +340,7 @@ Page {
                         }
                         Rectangle {
                             width: Math.max(3, Theme.paddingSmall / 2)
-                            height: parent.height * 0.56
+                            height: parent.height * 0.36
                             radius: width / 2
                             anchors.horizontalCenter: parent.horizontalCenter
                             anchors.top: parent.top
@@ -854,14 +854,31 @@ Page {
             }
         }
 
-        IconButton {
+        BackgroundItem {
             id: infoButton
             x: padCell * 2
             y: 0
             width: padCell
             height: padCell
-            icon.source: "image://theme/icon-m-question"
             onClicked: remoteController.info()
+
+            Rectangle {
+                anchors.centerIn: parent
+                width: Math.min(parent.width, parent.height) * 0.42
+                height: width
+                radius: width / 2
+                color: "transparent"
+                border.width: Math.max(2, Theme.paddingSmall / 3)
+                border.color: infoButton.highlighted ? Theme.highlightColor : Theme.primaryColor
+
+                Label {
+                    anchors.centerIn: parent
+                    text: "i"
+                    font.pixelSize: Theme.fontSizeMedium
+                    font.bold: true
+                    color: infoButton.highlighted ? Theme.highlightColor : Theme.primaryColor
+                }
+            }
         }
 
         Item {
