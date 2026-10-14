@@ -34,11 +34,23 @@ Item {
             // this part is needed, because the change of the value property by the slider breaks the automatic update
             // of the value (no longer connected), so we put it back via this signal handler
             volumePlugin.onCurrentVolumeChanged.connect(updateVolume);
+            if (volumePlugin.valueValid)
+                updateVolume(volumePlugin.currentVolume);
+            volumePlugin.refreshVolume();
+        }
+    }
+
+    Component.onCompleted: {
+        if (volumePlugin) {
+            if (volumePlugin.valueValid)
+                updateVolume(volumePlugin.currentVolume);
+            volumePlugin.refreshVolume();
         }
     }
     Component.onDestruction:
     {
-        volumePlugin.onCurrentVolumeChanged.disconnect(updateVolume);
+        if (volumePlugin)
+            volumePlugin.onCurrentVolumeChanged.disconnect(updateVolume);
     }
     function updateVolume(val)
     {

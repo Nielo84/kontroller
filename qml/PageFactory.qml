@@ -101,10 +101,6 @@ QtObject {
 
     function createCurrentlyPlayingPage()
     {
-        var page = pageStack.push("CurrentlyPlaying.qml");
-        page.mediaInformationClicked.connect(function (file)
-        {
-            createInformationPage(file);
-        });
+        pageStack.push("RemoteControl.qml");
     }
 }

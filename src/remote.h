@@ -14,33 +14,34 @@ class Client;
 
 class Remote : public QObject
 {
-	Q_OBJECT
-	eu::tgcm::kontroller::Client* client_ = nullptr;
+    Q_OBJECT
+    eu::tgcm::kontroller::Client* client_ = nullptr;
 
 public:
-	explicit Remote(QObject *parent = nullptr);
-	Q_PROPERTY(eu::tgcm::kontroller::Client* client READ client WRITE setClient NOTIFY clientChanged)
-	eu::tgcm::kontroller::Client* client() const;
+    explicit Remote(QObject *parent = nullptr);
+    Q_PROPERTY(eu::tgcm::kontroller::Client* client READ client WRITE setClient NOTIFY clientChanged)
+    eu::tgcm::kontroller::Client* client() const;
 
 signals:
-	void clientChanged(eu::tgcm::kontroller::Client* client);
+    void clientChanged(eu::tgcm::kontroller::Client* client);
 
 public slots:
-	void back();
-	void contextMenu();
-	void down();
-	//void executeAction();
-	void home();
-	void info();
-	void left();
-	void right();
-	void select();
-	void showCodec();
-	void showOSD();
-	void up();
-	void volumeUp();
-	void volumeDown();
-	void setClient(eu::tgcm::kontroller::Client* client);
+    void back();
+    void contextMenu();
+    void downloadSubtitles();
+    void down();
+    void home();
+    void info();
+    void left();
+    void right();
+    void select();
+    void sendText(const QString& text, bool done = true);
+    void showCodec();
+    void showOSD();
+    void up();
+    void volumeUp();
+    void volumeDown();
+    void setClient(eu::tgcm::kontroller::Client* client);
 };
 
 }

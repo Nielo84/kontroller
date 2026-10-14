@@ -33,7 +33,7 @@ void PlayerService::refreshPlayerInfo()
 	if(!refreshPending_)
 	{
 		refreshPending_ = true;
-		QJsonRpcMessage message = QJsonRpcMessage::createRequest("Player.getActivePlayers");
+		QJsonRpcMessage message = QJsonRpcMessage::createRequest("Player.GetActivePlayers");
 		QJsonRpcServiceReply* reply = client_->send(message);
 		if(reply)
 			connect(reply, &QJsonRpcServiceReply::finished, this, &PlayerService::refreshPlayerInfoCb_);
@@ -151,16 +151,12 @@ void PlayerService::updatePlayerSpeed(int playerId, int speed)
 		if (player->playerId() == playerId)
 		{
 			found = true;
-			if(speed == 0)
-			{
-				player->setSpeed(speed);
-			}
-			else
-			{
-				player->setActive(true);
-				player->refreshPlayerStatus();
-				emit activePlayerChanged();
-			}
+			// A paused player is still the active player. Refresh on both play
+			// and pause so the Remote page gets metadata immediately.
+			player->setActive(true);
+			player->setSpeed(speed);
+			player->refreshPlayerStatus();
+			emit activePlayerChanged();
 		}
 	}
 	if(!found)
@@ -198,7 +194,11 @@ void PlayerService::updatePlayerSeek_(int playerId, int hours, int minutes, int 
 		if(player->playerId() == playerId)
 		{
 			found = true;
-			player->setTime(player->time() + hours * 3600 * 1000 + minutes * 60 * 1000 + seconds * 1000 + milliseconds);
+			// Player.OnSeek supplies the absolute playback time. Follow it with
+			// a short debounced GetProperties refresh so any late/stale seek
+			// notifications cannot leave the slider at the wrong position.
+			player->setTime(hours * 3600 * 1000 + minutes * 60 * 1000 + seconds * 1000 + milliseconds);
+			player->scheduleStatusRefresh();
 		}
 	}
 	if(!found)
